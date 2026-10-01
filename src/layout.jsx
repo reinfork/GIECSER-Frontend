@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { getUser, logout } from './auth'
+import { ThemeToggle } from './theme'
 
 export default function Layout() {
   const user = getUser()
@@ -28,7 +29,10 @@ export default function Layout() {
         <div className="p-3 border-t border-slate-200 dark:border-slate-800">
           <div className="text-sm font-medium truncate">{user?.name}</div>
           <div className="text-xs text-slate-500 truncate">{user?.email}</div>
-          <button onClick={onLogout} className="mt-2 w-full text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded px-2 py-1">Logout</button>
+          <div className="flex gap-2 mt-2">
+            <button onClick={onLogout} className="flex-1 text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded px-2 py-1">Logout</button>
+            <ThemeToggle className="text-sm bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded px-2 py-1" />
+          </div>
         </div>
       </aside>
 
@@ -37,6 +41,7 @@ export default function Layout() {
         <header className="md:hidden flex items-center justify-between p-3 border-b bg-white dark:bg-slate-900">
           <span className="font-bold">Asri</span>
           <div className="flex gap-2">
+            <ThemeToggle className="text-sm px-2 py-1 rounded bg-slate-100 dark:bg-slate-800" />
             <Link to="/dashboard" className="text-sm px-2 py-1 rounded bg-slate-100">Dashboard</Link>
             <Link to="/courses" className="text-sm px-2 py-1 rounded bg-slate-100">Courses</Link>
           </div>

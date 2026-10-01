@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { getToken } from '../auth'
+import { ThemeToggle } from '../theme'
 
 export default function Landing() {
   const isAuthenticated = !!getToken()
@@ -11,6 +12,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">A</span> Asri ASR</div>
           <nav className="flex gap-2">
+            <ThemeToggle className="px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded" />
             {isAuthenticated ? (
               <Link to="/dashboard" className="px-3 py-1.5 rounded bg-violet-600 text-white text-sm">Dashboard</Link>
             ) : (
