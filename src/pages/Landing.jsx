@@ -10,7 +10,7 @@ export default function Landing() {
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">A</span> Asri ASR</div>
+          <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">A</span> GIECSER</div>
           <nav className="flex gap-2">
             <ThemeToggle className="px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded" />
             {isAuthenticated ? (
@@ -28,7 +28,7 @@ export default function Landing() {
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-8 items-center">
         <div className="space-y-5">
-          <span className="inline-block text-xs px-2 py-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30">ASR E-Book Interaktif • Bahasa Inggris</span>
+          <span className="inline-block text-xs px-2 py-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30">GIECSER Interactive E-Book • Bahasa Inggris</span>
           <h1 className="text-4xl lg:text-5xl font-bold leading-tight">Automatic Speech Recognition <span className="text-violet-600">untuk Belajar Bahasa Inggris</span></h1>
           <p className="text-slate-600 dark:text-slate-300">
             Automatic Speech Recognition (ASR) adalah teknologi yang mengenali, memproses, dan mengubah ujaran menjadi teks secara otomatis — mendukung pembelajaran mandiri di dalam dan luar kelas.

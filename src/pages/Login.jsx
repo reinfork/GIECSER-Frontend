@@ -4,8 +4,8 @@ import { login } from '../auth'
 
 export default function Login() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('admin@test.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('budi@email.com')
+  const [password, setPassword] = useState('budi123')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
