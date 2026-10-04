@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Mic, Volume2 } from 'lucide-react'
+import { Check, ExternalLink, Mic, Volume2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -8,9 +8,11 @@ import { cn } from '@/lib/utils'
 // Plain statement card for goal/reference modules (no speaking task attached).
 // YAGNI: no progress, no checklist — the seed stores goals as plain text.
 export function GoalBlock({ content, transcript }) {
+  const say = transcript && transcript !== content ? `${content}. ${transcript}` : (transcript || content)
   return (
     <Card className="mt-4">
       <CardContent className="pt-6 text-sm leading-relaxed whitespace-pre-wrap">
+        <div className="mb-3"><ListenButton text={say} /></div>
         {content}
         {transcript && transcript !== content && (
           <p className="mt-3 font-medium">{transcript}</p>
@@ -108,6 +110,16 @@ function speakText(line) {
   } catch { /* TTS unsupported — text stays readable */ }
 }
 
+// ponytail: fire-and-forget TTS, no pause/resume — add when passages outgrow one breath.
+export function ListenButton({ text }) {
+  if (!String(text || '').trim()) return null
+  return (
+    <button onClick={() => speakText(text)} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-secondary/70">
+      <Volume2 className="size-4" /> Listen
+    </button>
+  )
+}
+
 // Word/expression table. pairs: [["Heal","The crushed leaves…"]], words: ["Root",…].
 export function VocabTable({ pairs, words }) {
   const rows = pairs?.length ? pairs : (words || []).map((w) => [w])
@@ -150,11 +162,22 @@ function VocabRow({ word, example }) {
     r.onerror = () => setLive(false)
     try { r.start() } catch { setLive(false) }
   }
+  // ponytail: local string-match verdict — real phoneme scoring stays in the
+  // Groq module pipeline; per-word backend check replaces this when it exists.
+  const norm = (s) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  const hw = norm(heard).split(' ')
+  const ok = heard && (norm(word).includes(' ')
+    ? norm(heard).includes(norm(word)) || norm(word).includes(norm(heard))
+    : hw.includes(norm(word)))
   return (
     <TableRow>
       <TableCell className="font-medium whitespace-normal">
         {word}
-        {heard && <div className="font-normal text-xs text-muted-foreground mt-0.5">You said: &ldquo;{heard}&rdquo;</div>}
+        {heard && (
+          <div className={cn('font-normal text-xs mt-0.5', ok ? 'text-green-600' : 'text-amber-600')}>
+            {ok ? <><Check className="size-3.5 inline" /> Correct — </> : 'Try again — '}&ldquo;{heard}&rdquo;
+          </div>
+        )}
       </TableCell>
       <TableCell>
         {SR && (
@@ -201,7 +224,10 @@ export function LabeledSections({ text }) {
         return (
           <Card key={i} className="py-4">
             <CardContent className="text-sm">
-              <div className="font-semibold">{m[1].trim()}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">{m[1].trim()}</div>
+                <ListenButton text={sents.join(' ')} />
+              </div>
               <ul className="mt-1.5 list-disc list-inside space-y-1 text-muted-foreground">
                 {sents.map((s, j) => <li key={j} className="leading-relaxed">{s}</li>)}
               </ul>
@@ -226,6 +252,7 @@ export function QuizList({ tasks }) {
               <div className="flex items-center gap-2">
                 <Badge variant="outline">{t.type}</Badge>
                 <span className="text-muted-foreground">Q{i + 1}</span>
+                <span className="ml-auto"><ListenButton text={t.prompt} /></span>
               </div>
               <p className="mt-2 leading-relaxed whitespace-pre-wrap">{t.prompt}</p>
               {opt && !opt.statements && !opt.bank && !opt.sentences && (

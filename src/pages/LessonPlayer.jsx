@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GoalBlock, LabeledSections, QuizList, VideoBlock, VocabTable, parsePairs } from '@/components/lessons'
+import { DialogueScript, GoalBlock, LabeledSections, ListenButton, QuizList, VideoBlock, VocabTable, parsePairs } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -159,7 +159,10 @@ export default function LessonPlayer() {
             ) : module.type !== 'QUIZ' ? (
               <Card className="mt-4">
                 <CardContent className="pt-6 text-center">
-                  <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
+                    <ListenButton text={module.target_transcript || module.content_text} />
+                  </div>
                   <p className="text-lg leading-relaxed whitespace-pre-wrap mt-2">{module.target_transcript || module.content_text}</p>
                   {speakTask && canRecord && (
                   <Button size="lg" onClick={toggleRecording} disabled={submitting} className="mt-6 rounded-full">
