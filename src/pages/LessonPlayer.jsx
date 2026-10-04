@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DialogueScript, GoalBlock, QuizList, VideoBlock } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,7 +15,7 @@ export default function LessonPlayer() {
 
   const [module, setModule] = useState(null)
   const [siblings, setSiblings] = useState([])
-  const [task, setTask] = useState(null)
+  const [tasks, setTasks] = useState([])
   const [pending, setPending] = useState(true)
 
   const mediaRecorder = useRef(null)
@@ -35,7 +36,7 @@ export default function LessonPlayer() {
           authFetch(`/modules/${m.id}/tasks`).catch(() => ({ data: [] })),
         ])
         setSiblings(list.data || [])
-        setTask((tasks.data || []).find((t) => t.type === 'SPEAKING_RECORDING') || null)
+        setTasks(tasks.data || [])
       })
       .catch(() => {})
       .finally(() => setPending(false))
@@ -68,13 +69,14 @@ export default function LessonPlayer() {
   }
 
   async function submit(blob) {
-    if (!task) { setError('No speaking task on this module yet.'); return }
+    const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
+    if (!speakTask) { setError('No speaking task on this module yet.'); return }
     setSubmitting(true)
     try {
       const form = new FormData()
       form.append('audio', blob, 'practice.webm')
       const token = localStorage.getItem('token')
-      const res = await fetch(`${import.meta.env.VITE_API_BASE}/tasks/${task.id}/submit-audio`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE}/tasks/${speakTask.id}/submit-audio`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
@@ -90,6 +92,7 @@ export default function LessonPlayer() {
   const idx = siblings.findIndex((m) => m.id === id)
   const prev = idx > 0 ? siblings[idx - 1] : null
   const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null
+  const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -111,17 +114,51 @@ export default function LessonPlayer() {
             </div>
             <h1 className="text-2xl font-bold mt-1">{module.title}</h1>
 
-            <Card className="mt-4">
-              <CardContent className="pt-6 text-center">
-                <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
-                <p className="text-lg leading-relaxed whitespace-pre-wrap mt-2">{module.target_transcript || module.content_text}</p>
-                <Button size="lg" onClick={toggleRecording} disabled={submitting || !task} className="mt-6 rounded-full">
-                  {recording ? <><Square className="size-4" /> Stop & assess</> : <><Mic className="size-4" /> {submitting ? 'Scoring...' : 'Record speaking'}</>}
-                </Button>
-                {!task && <p className="text-xs text-muted-foreground mt-2">No speaking task attached to this module yet.</p>}
-                {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-              </CardContent>
-            </Card>
+            {module.type === 'VIDEO' ? (
+              <Card className="mt-4">
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground">{module.content_text}</p>
+                  <VideoBlock url={module.media_url} />
+                </CardContent>
+              </Card>
+            ) : module.type === 'DIALOGUE' ? (
+              <Card className="mt-4">
+                <CardContent className="pt-6">
+                  <p className="text-muted-foreground text-sm">{module.content_text}</p>
+                  <DialogueScript text={module.target_transcript} />
+                  {speakTask && (
+                    <div className="text-center">
+                      <Button size="lg" onClick={toggleRecording} disabled={submitting} className="mt-6 rounded-full">
+                        {recording ? <><Square className="size-4" /> Stop & assess</> : <><Mic className="size-4" /> {submitting ? 'Scoring...' : 'Record speaking'}</>}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : !speakTask && module.type !== 'QUIZ' ? (
+              <GoalBlock content={module.content_text} transcript={module.target_transcript} />
+            ) : module.type !== 'QUIZ' ? (
+              <Card className="mt-4">
+                <CardContent className="pt-6 text-center">
+                  <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
+                  <p className="text-lg leading-relaxed whitespace-pre-wrap mt-2">{module.target_transcript || module.content_text}</p>
+                  <Button size="lg" onClick={toggleRecording} disabled={submitting || !speakTask} className="mt-6 rounded-full">
+                    {recording ? <><Square className="size-4" /> Stop & assess</> : <><Mic className="size-4" /> {submitting ? 'Scoring...' : 'Record speaking'}</>}
+                  </Button>
+                  {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+                </CardContent>
+              </Card>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">{module.content_text}</p>
+            )}
+
+            {module.audio_model_url && (
+              <audio controls preload="none" src={module.audio_model_url} className="mt-4 w-full" />
+            )}
+
+            <QuizList tasks={tasks} />
+
+            {module.type === 'DIALOGUE' && error && <p className="text-sm text-red-600 mt-3 text-center">{error}</p>}
 
             {result && (
               <Card className="mt-4">
