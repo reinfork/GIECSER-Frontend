@@ -8,11 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
-const typeVariant = {
-  VIDEO: 'secondary', MONOLOGUE: 'default', DIALOGUE: 'default',
-  QUIZ: 'outline', ORAL_TEST: 'default',
-}
-
 export default function Courses() {
   const { id } = useParams()
 
@@ -68,7 +63,6 @@ export default function Courses() {
                       <span className="flex items-center gap-3">
                         <span className="w-8 h-8 rounded-lg bg-secondary grid place-items-center text-sm font-bold">{m.order_index}</span>
                         <span className="font-medium">{m.title}</span>
-                        <Badge variant={typeVariant[m.type] || 'outline'}>{m.type}</Badge>
                       </span>
                     </AccordionTrigger>
                     <AccordionContent>

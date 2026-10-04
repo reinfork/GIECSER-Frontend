@@ -1,6 +1,8 @@
-import { ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { ExternalLink, Mic, Volume2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
 // Plain statement card for goal/reference modules (no speaking task attached).
@@ -36,12 +38,26 @@ export function DialogueScript({ text }) {
   return (
     <div className="mt-4 space-y-2">
       {turns.map((t, i) => {
-        if (!t.speaker) return <p key={i} className="text-sm text-muted-foreground">{t.line}</p>
+        if (!t.speaker) {
+          return (
+            <p key={i} className="text-sm text-muted-foreground">
+              {t.line}{' '}
+              <button onClick={() => speakText(t.line)} aria-label="Hear narration" className="align-middle hover:text-foreground">
+                <Volume2 className="size-3.5 inline" />
+              </button>
+            </p>
+          )
+        }
         const left = speakers.indexOf(t.speaker) % 2 === 0
         return (
           <div key={i} className={cn('flex', left ? 'justify-start' : 'justify-end')}>
             <div className={cn('max-w-[85%] rounded-xl px-3 py-2 text-sm', left ? 'bg-secondary' : 'bg-primary text-primary-foreground')}>
-              <div className="text-xs font-bold opacity-70">{t.speaker}</div>
+              <div className="flex items-center gap-1.5 text-xs font-bold opacity-70">
+                {t.speaker}
+                <button onClick={() => speakText(t.line)} aria-label={`Hear ${t.speaker}'s line`} className="hover:opacity-100">
+                  <Volume2 className="size-3.5" />
+                </button>
+              </div>
               <div className="leading-relaxed">{t.line}</div>
             </div>
           </div>
@@ -74,6 +90,127 @@ export function VideoBlock({ url }) {
 
 function safeParse(s) {
   try { return s ? JSON.parse(s) : null } catch { return null }
+}
+
+// ponytail: hardcoded AvaMultilingual voice (supervisor pick) with en-voice
+// fallback — school machines without it still speak; a voice picker replaces
+// this when one hardcoded voice proves wrong across the lab.
+function speakText(line) {
+  try {
+    const u = new window.SpeechSynthesisUtterance(line)
+    const voices = window.speechSynthesis.getVoices()
+    u.voice = voices.find((v) => /ava.*multilingual/i.test(v.name))
+      || voices.find((v) => v.lang?.startsWith('en')) || null
+    u.lang = 'en-US'
+    u.rate = 0.9
+    window.speechSynthesis.cancel()
+    window.speechSynthesis.speak(u)
+  } catch { /* TTS unsupported — text stays readable */ }
+}
+
+// Word/expression table. pairs: [["Heal","The crushed leaves…"]], words: ["Root",…].
+export function VocabTable({ pairs, words }) {
+  const rows = pairs?.length ? pairs : (words || []).map((w) => [w])
+  if (!rows.length) return null
+  const showExample = pairs?.length > 0
+  return (
+    <Card className="mt-4 py-0 overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Word</TableHead>
+            <TableHead className="w-10" />
+            {showExample && <TableHead>Example</TableHead>}
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map(([w, ex], i) => <VocabRow key={i} word={w} example={showExample ? ex : null} />)}
+        </TableBody>
+      </Table>
+    </Card>
+  )
+}
+
+// ponytail: SpeechRecognition is Chrome/Edge-only — mic hides elsewhere, TTS
+// speaker stays; transcription-only by supervisor call, no scoring path.
+function VocabRow({ word, example }) {
+  const [heard, setHeard] = useState('')
+  const [live, setLive] = useState(false)
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  function listen() {
+    if (!SR) return
+    const r = new SR()
+    r.lang = 'en-US'
+    r.interimResults = false
+    r.maxAlternatives = 1
+    setLive(true)
+    r.onresult = (e) => setHeard(e.results[0][0].transcript)
+    r.onend = () => setLive(false)
+    r.onerror = () => setLive(false)
+    try { r.start() } catch { setLive(false) }
+  }
+  return (
+    <TableRow>
+      <TableCell className="font-medium whitespace-normal">
+        {word}
+        {heard && <div className="font-normal text-xs text-muted-foreground mt-0.5">You said: &ldquo;{heard}&rdquo;</div>}
+      </TableCell>
+      <TableCell>
+        {SR && (
+          <button onClick={listen} aria-label={`Say ${word}`} className={cn('rounded-full bg-secondary p-1.5 hover:bg-secondary/70', live && 'animate-pulse bg-red-100 text-red-600')}>
+            <Mic className="size-4" />
+          </button>
+        )}
+      </TableCell>
+      {example != null && <TableCell className="text-muted-foreground whitespace-normal">{example}</TableCell>}
+      <TableCell className="text-right">
+        <button onClick={() => speakText(word)} aria-label={`Hear ${word}`} className="text-muted-foreground hover:text-foreground">
+          <Volume2 className="size-4" />
+        </button>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+// ponytail: parses single-word-headed "Word: example." pairs (langExpr/guideVocab shape);
+// multi-word heads ("Identifying and naming:") are function sections, not vocab — see LabeledSections.
+export function parsePairs(text) {
+  const out = []
+  for (const seg of String(text || '').split(/(?<=[.?!])\s+/)) {
+    const m = seg.match(/^([A-Za-z][\w-]*):\s*(.+[.?!])?\s*$/)
+    if (m && m[2]) out.push([m[1], m[2].trim()])
+  }
+  return out.length >= 2 ? out : []
+}
+
+// Sectioned "Heading: sentence. sentence." blocks — one shape serves Language
+// Function (book bullets) and Grammar Focus (term + example); ID glosses render
+// when seeds carry them, never invented here.
+// ponytail: colon-heading heuristic — misfires if a seed sentence ever starts
+// "Like this:" mid-prose; a real `subtype` column ends the sniffing.
+export function LabeledSections({ text }) {
+  const parts = String(text || '').split(/\s*(?=[A-Z][^.:;]{2,50}:\s)/g).filter((s) => s.trim())
+  if (!parts.length) return null
+  return (
+    <div className="mt-4 space-y-3">
+      {parts.map((p, i) => {
+        const m = p.match(/^([^.:;]{2,50}):\s*([\s\S]*)$/)
+        if (!m) return <p key={i} className="text-sm text-muted-foreground leading-relaxed">{p.trim()}</p>
+        const sents = m[2].split(/(?<=[.?!])\s+/).map((s) => s.trim()).filter(Boolean)
+        return (
+          <Card key={i} className="py-4">
+            <CardContent className="text-sm">
+              <div className="font-semibold">{m[1].trim()}</div>
+              <ul className="mt-1.5 list-disc list-inside space-y-1 text-muted-foreground">
+                {sents.map((s, j) => <li key={j} className="leading-relaxed">{s}</li>)}
+              </ul>
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
 }
 
 // ponytail: prompt-only cards — student API strips answer keys (Task.Public) and no check endpoint exists; add POST /tasks/:id/check when grading is wanted.
