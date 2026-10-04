@@ -1,6 +1,46 @@
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { getToken } from '../auth'
+import { validatePin } from '../auth'
 import { ThemeToggle } from '../theme'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+
+function PinCard() {
+  const navigate = useNavigate()
+  const [code, setCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function onSubmit(e) {
+    e.preventDefault()
+    setLoading(true); setError('')
+    try { await validatePin(code); navigate('/dashboard') }
+    catch (err) { setError(err.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <Card id="pin" className="max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle>Masuk Kelas</CardTitle>
+        <CardDescription>Masukkan 6 digit kode dari gurumu untuk mulai belajar</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="flex gap-2">
+          <Input
+            value={code} onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="RIAU89" maxLength={6} required
+            className="uppercase tracking-[0.3em] text-center font-mono"
+          />
+          <Button type="submit" disabled={loading}>{loading ? '...' : 'Mulai'}</Button>
+        </form>
+        {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mt-3">{error}</div>}
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function Landing() {
   const isAuthenticated = !!getToken()
@@ -10,16 +50,13 @@ export default function Landing() {
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">A</span> GIECSER</div>
-          <nav className="flex gap-2">
+          <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">A</span> Asri ASR</div>
+          <nav className="flex gap-2 items-center">
             <ThemeToggle className="px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded" />
             {isAuthenticated ? (
               <Link to="/dashboard" className="px-3 py-1.5 rounded bg-violet-600 text-white text-sm">Dashboard</Link>
             ) : (
-              <>
-                <Link to="/login" className="px-3 py-1.5 text-sm hover:bg-slate-100 rounded">Login</Link>
-                <Link to="/register" className="px-3 py-1.5 bg-violet-600 text-white rounded text-sm">Register</Link>
-              </>
+              <Link to="/teacher/login" className="px-3 py-1.5 text-sm hover:bg-slate-100 rounded">Teacher</Link>
             )}
           </nav>
         </div>
@@ -28,17 +65,17 @@ export default function Landing() {
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-4 py-12 grid lg:grid-cols-2 gap-8 items-center">
         <div className="space-y-5">
-          <span className="inline-block text-xs px-2 py-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30">GIECSER Interactive E-Book • Bahasa Inggris</span>
+          <span className="inline-block text-xs px-2 py-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/30">ASR E-Book Interaktif • Bahasa Inggris</span>
           <h1 className="text-4xl lg:text-5xl font-bold leading-tight">Automatic Speech Recognition <span className="text-violet-600">untuk Belajar Bahasa Inggris</span></h1>
           <p className="text-slate-600 dark:text-slate-300">
             Automatic Speech Recognition (ASR) adalah teknologi yang mengenali, memproses, dan mengubah ujaran menjadi teks secara otomatis — mendukung pembelajaran mandiri di dalam dan luar kelas.
           </p>
           <div className="flex gap-3">
-            <Link to={isAuthenticated ? '/dashboard' : '/register'} className="px-5 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium">Mulai Belajar →</Link>
-            <Link to="/login" className="px-5 py-2.5 border rounded-lg text-sm">Masuk</Link>
+            <a href="#pin" className="px-5 py-2.5 bg-violet-600 text-white rounded-lg text-sm font-medium">Mulai Belajar →</a>
+            <Link to="/teacher/login" className="px-5 py-2.5 border rounded-lg text-sm">Guru</Link>
           </div>
           <div className="text-xs text-slate-500 flex gap-4">
-            <span>✓ Go + Gin + GORM</span><span>✓ React + Vite + Tailwind</span><span>✓ JWT Auth</span>
+            <span>✓ Go + Gin + GORM</span><span>✓ React + Vite + Tailwind</span><span>✓ PIN + JWT</span>
           </div>
         </div>
         <div className="bg-gradient-to-br from-violet-600 to-emerald-500 rounded-2xl p-6 text-white">
@@ -51,6 +88,11 @@ export default function Landing() {
             <li>Speech Input</li><li>Signal Processing</li><li>Feature Extraction</li><li>Pattern Matching</li><li>Text Output</li>
           </ol>
         </div>
+      </section>
+
+      {/* PIN entry */}
+      <section className="max-w-6xl mx-auto px-4 py-8">
+        <PinCard />
       </section>
 
       {/* What is ASR */}
@@ -115,10 +157,9 @@ export default function Landing() {
       <section className="max-w-6xl mx-auto px-4 py-10 text-center">
         <div className="rounded-2xl bg-violet-600 text-white p-8">
           <h2 className="text-2xl font-bold">Siap berlatih Bahasa Inggris dengan ASR?</h2>
-          <p className="text-white/80 text-sm mt-2">Login untuk membuka dashboard, atau register sebagai student.</p>
+          <p className="text-white/80 text-sm mt-2">Minta kode kelas ke gurumu, lalu masukkan di atas.</p>
           <div className="mt-4 flex justify-center gap-3">
-            <Link to="/register" className="px-5 py-2 bg-white text-violet-600 rounded-lg text-sm font-medium">Daftar Sekarang</Link>
-            <Link to="/login" className="px-5 py-2 bg-violet-700 rounded-lg text-sm">Masuk</Link>
+            <a href="#pin" className="px-5 py-2 bg-white text-violet-600 rounded-lg text-sm font-medium">Masukkan Kode</a>
           </div>
         </div>
       </section>

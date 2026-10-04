@@ -5,7 +5,7 @@ COPY package*.json ./
 RUN npm ci
 COPY . .
 
-ARG VITE_API_BASE
+ARG VITE_API_BASE=https://api.giecser.tech
 ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 

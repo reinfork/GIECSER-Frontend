@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Moon, Sun } from 'lucide-react'
 
 export function currentTheme() {
   return localStorage.getItem('theme')
@@ -18,7 +19,7 @@ export function ThemeToggle({ className = '' }) {
   const flip = () => { const n = t === 'dark' ? 'light' : 'dark'; setT(n); applyTheme(n) }
   return (
     <button onClick={flip} aria-label="Toggle theme" title="Toggle theme" className={className}>
-      {t === 'dark' ? '☀️' : '🌙'}
+      {t === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
     </button>
   )
 }

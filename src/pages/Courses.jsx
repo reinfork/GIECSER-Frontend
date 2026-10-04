@@ -1,66 +1,90 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { API } from '../auth'
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
+import { authFetch } from '../auth'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 
-const limit = 6
+const typeVariant = {
+  VIDEO: 'secondary', MONOLOGUE: 'default', DIALOGUE: 'default',
+  QUIZ: 'outline', ORAL_TEST: 'default',
+}
 
 export default function Courses() {
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [courses, setCourses] = useState([])
+  const { id } = useParams()
+
+  const [course, setCourse] = useState(null)
+  const [modules, setModules] = useState([])
   const [pending, setPending] = useState(true)
-  const [q, setQ] = useState('')
 
-  const totalPages = Math.ceil(total / limit) || 1
-  // ponytail: filters current page only — add ?q= server search when courses grow
-  const filtered = useMemo(() =>
-    q ? courses.filter((c) => c.title.toLowerCase().includes(q.toLowerCase())) : courses,
-  [courses, q])
-
-  async function fetchData() {
+  useEffect(() => {
     setPending(true)
-    try {
-      const res = await fetch(`${API}/courses?page=${page}&limit=${limit}`).then((r) => r.json())
-      setCourses(res.data || [])
-      setTotal(res.meta?.total ?? res.data?.length ?? 0)
-    } catch { /* keep stale list */ } finally { setPending(false) }
-  }
-
-  useEffect(() => { fetchData() }, [page])
+    Promise.all([
+      authFetch(`/courses/${id}`).catch(() => null),
+      authFetch(`/courses/${id}/modules`).catch(() => ({ data: [] })),
+    ])
+      .then(([co, list]) => { setCourse(co); setModules(list.data || []) })
+      .finally(() => setPending(false))
+  }, [id])
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">Courses — English ASR Practice</h1>
-        <div className="flex gap-2">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..." className="border rounded px-3 py-1 text-sm" />
-        </div>
-      </div>
+    <div className="p-6 max-w-5xl mx-auto">
+      <Link to="/dashboard" className="text-sm text-primary">← Back to chapters</Link>
 
       {pending ? (
-        <div className="py-12 text-center text-sm">Loading...</div>
+        <div className="mt-3 space-y-2"><Skeleton className="h-8 w-1/2" /><Skeleton className="h-4 w-3/4" /></div>
+      ) : !course ? (
+        <div className="py-12 text-center text-sm text-muted-foreground">Course not found.</div>
       ) : (
-        <>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((c) => (
-              <div key={c.id} className="border rounded-xl p-4 bg-white dark:bg-slate-900">
-                <div className="font-semibold">{c.title}</div>
-                <div className="text-xs text-slate-500">ID {c.id} • {c.lessons?.length ?? 0} lessons</div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 line-clamp-2">{c.description}</p>
-                <div className="mt-3 flex gap-2">
-                  <Link to={`/courses/${c.id}`} className="text-xs bg-violet-600 text-white px-2 py-1 rounded">Practice</Link>
+        <div className="mt-3">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Badge variant="secondary">{modules.length} modules</Badge>
+                  <h1 className="text-2xl font-bold mt-2">{course.title}</h1>
+                  <p className="text-sm text-muted-foreground mt-1">{course.description}</p>
                 </div>
+                {modules.length > 0 && (
+                  <Button asChild className="shrink-0 rounded-full">
+                    <Link to={`/modules/${modules[0].id}`}>Continue Learning</Link>
+                  </Button>
+                )}
               </div>
-            ))}
+            </CardContent>
+          </Card>
+
+          <div className="mt-6">
+            {modules.length === 0 ? (
+              <div className="py-6 text-sm text-muted-foreground text-center">No modules yet.</div>
+            ) : (
+              <Accordion type="single" collapsible className="space-y-2">
+                {modules.map((m) => (
+                  <AccordionItem key={m.id} value={m.id} className="border rounded-xl px-4 bg-card">
+                    <AccordionTrigger className="hover:no-underline py-4">
+                      <span className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-lg bg-secondary grid place-items-center text-sm font-bold">{m.order_index}</span>
+                        <span className="font-medium">{m.title}</span>
+                        <Badge variant={typeVariant[m.type] || 'outline'}>{m.type}</Badge>
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{m.content_text || m.target_transcript}</p>
+                      <div className="mt-3">
+                        <Button size="sm" asChild>
+                          <Link to={`/modules/${m.id}`}>Open module <ArrowRight className="size-4" /></Link>
+                        </Button>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
           </div>
-          <div className="flex items-center justify-between mt-4 text-sm">
-            <span className="text-slate-500">Total {total} • Page {page}/{totalPages}</span>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-2 py-1 border rounded disabled:opacity-50">Prev</button>
-              <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-2 py-1 border rounded disabled:opacity-50">Next</button>
-            </div>
-          </div>
-        </>
+        </div>
       )}
     </div>
   )
