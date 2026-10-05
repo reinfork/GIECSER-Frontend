@@ -10,6 +10,7 @@ import Teacher from './pages/Teacher.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Courses from './pages/Courses.jsx'
 import CourseDetail from './pages/CourseDetail.jsx'
+import ChapterClose from './pages/ChapterClose.jsx'
 import LessonPlayer from './pages/LessonPlayer.jsx'
 import { getKind, getToken } from './auth'
 
@@ -29,6 +30,8 @@ const router = createBrowserRouter([
     children: [
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'chapters/:id', element: <CourseDetail /> },
+      { path: 'chapters/:id/reflection', element: <ChapterClose mode="reflection" /> },
+      { path: 'chapters/:id/mastery', element: <ChapterClose mode="mastery" /> },
       { path: 'courses/:id', element: <Courses /> },
       { path: 'modules/:id', element: <LessonPlayer /> },
     ],

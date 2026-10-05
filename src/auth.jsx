@@ -45,7 +45,7 @@ export function logout() {
   // Shared desktops: practice aggregates must not leak into the next class.
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const k = localStorage.key(i)
-    if (k?.startsWith('asri_chapter_') || k?.startsWith('asri_verdict_')) localStorage.removeItem(k)
+    if (k?.startsWith('asri_chapter_') || k?.startsWith('asri_verdict_') || k?.startsWith('asri_reflect_')) localStorage.removeItem(k)
   }
 }
 

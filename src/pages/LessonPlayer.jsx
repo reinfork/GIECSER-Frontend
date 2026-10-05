@@ -132,6 +132,8 @@ export default function LessonPlayer() {
       const agg = JSON.parse(localStorage.getItem(key) || '{}')
       agg[taskId] = {
         task_id: taskId,
+        module_id: module?.id || '',
+        module_title: module?.title || '',
         reference: module?.target_transcript || '',
         transcribed: json.transcribed_text || '',
         word_accuracy: json.word_accuracy_score || 0,
