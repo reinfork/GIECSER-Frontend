@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GoalBlock, LabeledSections, ListenButton, QuizList, VideoBlock, VocabTable, parsePairs } from '@/components/lessons'
+import { DialogueScript, GoalBlock, LabeledSections, ListenButton, QuizList, VideoBlock, VocabTable, WordsToFix, parsePairs } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,13 +17,18 @@ export default function LessonPlayer() {
   const [siblings, setSiblings] = useState([])
   const [tasks, setTasks] = useState([])
   const [courseTitle, setCourseTitle] = useState('')
+  const [chapterId, setChapterId] = useState('')
   const [pending, setPending] = useState(true)
 
   const mediaRecorder = useRef(null)
   const chunks = useRef([])
+  const recog = useRef(null)
+  const startedAt = useRef(0)
+  const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
   const [recording, setRecording] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
+  const [live, setLive] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -40,17 +45,52 @@ export default function LessonPlayer() {
         setSiblings(list.data || [])
         setTasks(tasks.data || [])
         setCourseTitle(course.title || '')
+        setChapterId(course.chapter_id || '')
       })
       .catch(() => {})
       .finally(() => setPending(false))
   }, [id])
 
+  // ponytail: browser transcription first (bytes over HTTPS, no Groq in the
+  // hot path — survives 40-concurrent classrooms); MediaRecorder upload stays
+  // as the no-SR fallback. Interim text is display-only, never submitted.
   async function toggleRecording() {
     if (recording) {
-      mediaRecorder.current?.stop()
+      if (SR) { try { recog.current?.stop() } catch { /* already stopped */ } }
+      else mediaRecorder.current?.stop()
       return
     }
-    setError(''); setResult(null)
+    setError(''); setResult(null); setLive('')
+    const task = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
+    if (!task) { setError('No speaking task on this module yet.'); return }
+    if (SR) {
+      const r = new SR()
+      recog.current = r
+      r.lang = 'en-US'
+      r.interimResults = true
+      r.maxAlternatives = 1
+      startedAt.current = Date.now()
+      setRecording(true)
+      r.onresult = (e) => {
+        let interim = '', fin = ''
+        for (const res of e.results) {
+          if (res.isFinal) fin += res[0].transcript
+          else interim += res[0].transcript
+        }
+        if (interim) setLive(interim)
+        if (fin) {
+          setLive(''); setRecording(false)
+          submitText(task, fin, (Date.now() - startedAt.current) / 1000)
+        }
+      }
+      r.onend = () => { setRecording(false); setLive('') }
+      r.onerror = (e) => {
+        setRecording(false); setLive('')
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') setError('Microphone unavailable — allow access and retry.')
+      }
+      try { r.start() } catch { setRecording(false) }
+      return
+    }
     let stream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -71,6 +111,42 @@ export default function LessonPlayer() {
     setRecording(true)
   }
 
+  async function submitText(task, transcribed, durationSec) {
+    setSubmitting(true)
+    try {
+      const json = await authFetch(`/tasks/${task.id}/submit-text`, {
+        method: 'POST',
+        body: JSON.stringify({ transcribed, duration_sec: durationSec }),
+      })
+      setResult(json)
+      storeAttempt(task.id, json)
+    } catch (e) { setError(e.message) } finally { setSubmitting(false) }
+  }
+
+  // ponytail: newest-wins per task — retries overwrite, chapter verdict
+  // always describes current ability; progress-over-time needs log reads.
+  function storeAttempt(taskId, json) {
+    try {
+      if (!chapterId) return
+      const key = `asri_chapter_${chapterId}`
+      const agg = JSON.parse(localStorage.getItem(key) || '{}')
+      agg[taskId] = {
+        task_id: taskId,
+        reference: module?.target_transcript || '',
+        transcribed: json.transcribed_text || '',
+        word_accuracy: json.word_accuracy_score || 0,
+        fluency: json.fluency_score || 0,
+        pronunciation: json.pronunciation_score || json.word_accuracy_score || 0,
+        wpm: json.wpm || 0,
+        phonetic_words: (json.feedback?.phonetic_feedback || []).map((p) => p.word).filter(Boolean),
+        attempted_at: new Date().toISOString(),
+      }
+      const entries = Object.entries(agg).sort((a, b) => (a[1].attempted_at < b[1].attempted_at ? -1 : 1))
+      while (entries.length > 30) entries.shift()
+      localStorage.setItem(key, JSON.stringify(Object.fromEntries(entries)))
+    } catch { /* aggregate best-effort; score stands */ }
+  }
+
   async function submit(blob) {
   const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
     if (!speakTask) { setError('No speaking task on this module yet.'); return }
@@ -89,6 +165,7 @@ export default function LessonPlayer() {
       try { json = text ? JSON.parse(text) : {} } catch { throw new Error(text.slice(0, 120) || `HTTP ${res.status}`) }
       if (!res.ok) throw new Error(json.error || 'Assessment failed, try again')
       setResult(json)
+      storeAttempt(speakTask.id, json)
     } catch (e) { setError(e.message) } finally { setSubmitting(false) }
   }
 
@@ -190,6 +267,13 @@ export default function LessonPlayer() {
               <audio controls preload="none" src={module.audio_model_url} className="mt-4 w-full" />
             )}
 
+            {recording && (
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                <span className="mr-2 inline-block size-2 animate-pulse rounded-full bg-red-500" />
+                {live ? `“${live}”` : 'Listening…'}
+              </p>
+            )}
+
             <QuizList tasks={tasks} />
 
             {(module.type === 'DIALOGUE' || module.type === 'VIDEO' || pairRows.length > 0 || isBareList) && error && <p className="text-sm text-red-600 mt-3 text-center">{error}</p>}
@@ -197,15 +281,16 @@ export default function LessonPlayer() {
             {result && (
               <Card className="mt-4">
                 <CardHeader>
-                  <CardTitle>Score: {Math.round(result.pronunciation_score)}%</CardTitle>
+                  <CardTitle>Score: {Math.round(result.pronunciation_score ?? result.word_accuracy_score)}%</CardTitle>
                   <CardDescription>&ldquo;{result.transcribed_text}&rdquo;</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="border rounded-lg p-2"><div className="font-bold">{Math.round(result.word_accuracy_score)}%</div><div className="text-xs text-muted-foreground">Accuracy</div></div>
                     <div className="border rounded-lg p-2"><div className="font-bold">{Math.round(result.fluency_score)}%</div><div className="text-xs text-muted-foreground">Fluency</div></div>
-                    <div className="border rounded-lg p-2"><div className="font-bold">{Math.round(result.pronunciation_score)}%</div><div className="text-xs text-muted-foreground">Overall</div></div>
+                    <div className="border rounded-lg p-2"><div className="font-bold">{Math.round(result.pronunciation_score ?? result.word_accuracy_score)}%</div><div className="text-xs text-muted-foreground">Overall</div></div>
                   </div>
+                  <WordsToFix reference={module.target_transcript} transcribed={result.transcribed_text} words={result.mispronounced} />
                   {result.feedback?.phonetic_feedback?.length > 0 && (
                     <div>
                       <div className="font-semibold mb-1">Pronunciation notes</div>

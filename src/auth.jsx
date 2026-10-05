@@ -42,6 +42,11 @@ export function logout() {
   localStorage.removeItem('token')
   localStorage.removeItem('asri_profile')
   localStorage.removeItem('user')
+  // Shared desktops: practice aggregates must not leak into the next class.
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i)
+    if (k?.startsWith('asri_chapter_') || k?.startsWith('asri_verdict_')) localStorage.removeItem(k)
+  }
 }
 
 export async function authFetch(path, opts = {}) {

@@ -148,19 +148,29 @@ export function VocabTable({ pairs, words }) {
 // speaker stays; transcription-only by supervisor call, no scoring path.
 function VocabRow({ word, example }) {
   const [heard, setHeard] = useState('')
-  const [live, setLive] = useState(false)
+  const [live, setLive] = useState('')
+  const [on, setOn] = useState(false)
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
   function listen() {
     if (!SR) return
+    if (on) return
     const r = new SR()
     r.lang = 'en-US'
-    r.interimResults = false
+    r.interimResults = true
     r.maxAlternatives = 1
-    setLive(true)
-    r.onresult = (e) => setHeard(e.results[0][0].transcript)
-    r.onend = () => setLive(false)
-    r.onerror = () => setLive(false)
-    try { r.start() } catch { setLive(false) }
+    setOn(true); setLive('')
+    r.onresult = (e) => {
+      let interim = '', fin = ''
+      for (const res of e.results) {
+        if (res.isFinal) fin += res[0].transcript
+        else interim += res[0].transcript
+      }
+      if (interim) setLive(interim)
+      if (fin) { setHeard(fin); setLive(''); setOn(false) }
+    }
+    r.onend = () => { setOn(false); setLive('') }
+    r.onerror = () => { setOn(false); setLive('') }
+    try { r.start() } catch { setOn(false) }
   }
   // ponytail: local string-match verdict — real phoneme scoring stays in the
   // Groq module pipeline; per-word backend check replaces this when it exists.
@@ -173,6 +183,7 @@ function VocabRow({ word, example }) {
     <TableRow>
       <TableCell className="font-medium whitespace-normal">
         {word}
+        {on && live && <div className="font-normal text-xs text-muted-foreground mt-0.5 animate-pulse">&ldquo;{live}&rdquo;</div>}
         {heard && (
           <div className={cn('font-normal text-xs mt-0.5', ok ? 'text-green-600' : 'text-amber-600')}>
             {ok ? <><Check className="size-3.5 inline" /> Correct — </> : 'Try again — '}&ldquo;{heard}&rdquo;
@@ -181,7 +192,7 @@ function VocabRow({ word, example }) {
       </TableCell>
       <TableCell>
         {SR && (
-          <button onClick={listen} aria-label={`Say ${word}`} className={cn('rounded-full bg-secondary p-1.5 hover:bg-secondary/70', live && 'animate-pulse bg-red-100 text-red-600')}>
+          <button onClick={listen} aria-label={`Say ${word}`} className={cn('rounded-full bg-secondary p-1.5 hover:bg-secondary/70', on && 'animate-pulse bg-red-100 text-red-600')}>
             <Mic className="size-4" />
           </button>
         )}
@@ -193,6 +204,43 @@ function VocabRow({ word, example }) {
         </button>
       </TableCell>
     </TableRow>
+  )
+}
+
+// ponytail: mirrors scoring.Words + WER backtrack priority so chips agree with
+// the server accuracy; converges if the backend ever returns the alignment.
+export function mispronounced(reference, transcribed) {
+  const words = (s) => (String(s || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
+  const ref = words(reference), hyp = words(transcribed)
+  const dp = Array.from({ length: ref.length + 1 }, (_, a) => {
+    const row = new Array(hyp.length + 1).fill(0)
+    row[0] = a
+    return row
+  })
+  for (let b = 0; b <= hyp.length; b++) dp[0][b] = b
+  for (let a = 1; a <= ref.length; a++)
+    for (let b = 1; b <= hyp.length; b++)
+      dp[a][b] = Math.min(dp[a - 1][b] + 1, dp[a][b - 1] + 1, dp[a - 1][b - 1] + (ref[a - 1] === hyp[b - 1] ? 0 : 1))
+  const bad = []
+  for (let a = ref.length, b = hyp.length; a > 0 || b > 0;) {
+    if (a > 0 && b > 0 && ref[a - 1] === hyp[b - 1]) { a--; b-- }
+    else if (a > 0 && b > 0 && dp[a][b] === dp[a - 1][b - 1] + 1) { bad.unshift(ref[a - 1]); a--; b-- }
+    else if (b > 0 && dp[a][b] === dp[a][b - 1] + 1) b--
+    else { bad.unshift(ref[a - 1]); a-- }
+  }
+  return [...new Set(bad)]
+}
+
+export function WordsToFix({ reference, transcribed, words }) {
+  const list = words?.length ? words : mispronounced(reference, transcribed)
+  if (!list.length) return null
+  return (
+    <div>
+      <div className="font-semibold mb-1">Words to fix</div>
+      <div className="flex flex-wrap gap-1.5">
+        {list.map((w) => <Badge key={w} variant="secondary">{w}</Badge>)}
+      </div>
+    </div>
   )
 }
 
