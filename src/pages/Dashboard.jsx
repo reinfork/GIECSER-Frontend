@@ -57,7 +57,7 @@ export default function Dashboard() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <p className="text-sm text-muted-foreground">
-        Welcome{profile?.kind === 'teacher' ? `, ${profile.email}` : ''} — ASR English Practice
+        Welcome{profile?.kind === 'teacher' ? `, ${profile.email}` : ''} — GIECSER ASR English Practice
       </p>
       <h1 className="text-2xl font-bold mt-1 mb-6">Chapters</h1>
 

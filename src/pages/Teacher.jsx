@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { KeyRound, LogOut, Plus } from 'lucide-react'
 import { authFetch, getProfile, logout } from '../auth'
 import { Badge } from '@/components/ui/badge'
@@ -39,11 +39,10 @@ export default function Teacher() {
       <header className="sticky top-0 z-50 border-b bg-card">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold">
-            <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">A</span>
+            <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">G</span>
             Teacher Panel <span className="text-xs font-normal text-muted-foreground">{profile?.email}</span>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" asChild><Link to="/">Landing</Link></Button>
             <Button variant="outline" size="sm" onClick={() => { logout(); navigate('/') }}>
               <LogOut className="size-4" /> Logout
             </Button>

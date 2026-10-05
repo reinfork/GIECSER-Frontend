@@ -33,8 +33,8 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className="w-64 shrink-0 bg-card border-r hidden md:flex flex-col">
         <div className="p-5 flex items-center gap-2 font-bold text-lg">
-          <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">A</span>
-          Asri ASR
+          <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">G</span>
+          GIECSER ASR
         </div>
         <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
           <Link to="/dashboard" className={item(pathname === '/dashboard')}>
@@ -72,7 +72,7 @@ export default function Layout() {
       {/* Mobile header */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden flex items-center justify-between p-3 border-b bg-card">
-          <span className="font-bold">Asri</span>
+          <span className="font-bold">GIECSER</span>
           <div className="flex gap-2">
             <ThemeToggle className="text-sm px-2 py-1 rounded-md bg-secondary" />
             <Link to="/dashboard" className="text-sm px-2 py-1 rounded-md bg-secondary">Dashboard</Link>

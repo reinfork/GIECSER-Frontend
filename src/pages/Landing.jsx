@@ -50,7 +50,7 @@ export default function Landing() {
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">A</span> Asri ASR</div>
+          <div className="flex items-center gap-2 font-bold text-lg"><span className="w-8 h-8 rounded bg-violet-600 text-white grid place-items-center">G</span> GIECSER ASR</div>
           <nav className="flex gap-2 items-center">
             <ThemeToggle className="px-3 py-1.5 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded" />
             {isAuthenticated ? (
@@ -164,7 +164,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t py-6 text-center text-xs text-slate-500">Asri ASR E-Book • React + Vite + Tailwind • Go/Gin Backend</footer>
+      <footer className="border-t py-6 text-center text-xs text-slate-500">GIECSER ASR E-Book • React + Vite + Tailwind • Go/Gin Backend</footer>
     </div>
   )
 }

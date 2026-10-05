@@ -186,8 +186,8 @@ export default function LessonPlayer() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <Link to={module ? `/courses/${module.course_id}` : '/dashboard'} className="inline-flex items-center gap-1 text-sm text-primary">
-        <ArrowLeft className="size-4" /> Back to course
+      <Link to={chapterId ? `/chapters/${chapterId}` : '/dashboard'} className="inline-flex items-center gap-1 text-sm text-primary">
+        <ArrowLeft className="size-4" /> Back to chapter
       </Link>
 
       {pending ? (

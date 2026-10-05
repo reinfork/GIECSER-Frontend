@@ -27,7 +27,7 @@ export default function Courses() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <Link to="/dashboard" className="text-sm text-primary">← Back to chapters</Link>
+      <Link to="/dashboard" className="text-sm text-primary">← Back to dashboard</Link>
 
       {pending ? (
         <div className="mt-3 space-y-2"><Skeleton className="h-8 w-1/2" /><Skeleton className="h-4 w-3/4" /></div>
