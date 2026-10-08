@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GoalBlock, LabeledSections, ListenButton, QuizList, VideoBlock, VocabTable, WordsToFix, parsePairs } from '@/components/lessons'
+import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, QuizList, VideoBlock, VocabTable, WordsToFix, parsePairs, parseTable } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -182,7 +182,8 @@ export default function LessonPlayer() {
   const body = module?.target_transcript || ''
   const isFunc = /function|grammar/i.test(module?.title || '')
   const pairRows = !isFunc ? parsePairs(body) : []
-  const isBareList = !isFunc && body.trim() && !/[.?!]/.test(body) && !pairRows.length
+  const tableRows = !isFunc && !pairRows.length ? parseTable(body) : []
+  const isBareList = !isFunc && body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
   // Table-name lists ("from Table 2.1") are display-first: no mic by supervisor call.
   const isTableList = !!isBareList && /from Table/i.test(module?.content_text || '')
 
@@ -231,6 +232,8 @@ export default function LessonPlayer() {
               <LabeledSections text={body || module.content_text} />
             ) : pairRows.length ? (
               <VocabTable pairs={pairRows} />
+            ) : tableRows.length ? (
+              <GlossaryTable rows={tableRows} />
             ) : isBareList ? (
               <VocabTable words={body.trim().split(/[\s,]+/).filter(Boolean)} />
             ) : !speakTask && module.type !== 'QUIZ' ? (

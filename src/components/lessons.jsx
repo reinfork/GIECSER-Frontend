@@ -244,6 +244,46 @@ export function WordsToFix({ reference, transcribed, words }) {
   )
 }
 
+// ponytail: display-only book glossary (Table 1 shape) — deliberately separate
+// from VocabTable (practice: speaker/mic/verdict); merging them regrows
+// prop-flags. A "No" column mirrors the book numbering (seed order = book order).
+export function GlossaryTable({ rows }) {
+  if (!rows?.length) return null
+  return (
+    <Card className="mt-4 py-0 overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10">No</TableHead>
+            <TableHead>Vocabulary</TableHead>
+            <TableHead>Meaning</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map(([w, m], i) => (
+            <TableRow key={i}>
+              <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+              <TableCell className="font-medium whitespace-normal">{w}</TableCell>
+              <TableCell className="text-muted-foreground whitespace-normal">{m}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Card>
+  )
+}
+
+// ponytail: "Name => Meaning." table rows (Table 1 shape) — tried before
+// parsePairs since game names are multi-word; "=>" never occurs in prose.
+export function parseTable(text) {
+  const out = []
+  for (const seg of String(text || '').split(/(?<=[.?!])\s+/)) {
+    const m = seg.match(/^(.+?)\s*=>\s*(.+[.?!])?\s*$/)
+    if (m && m[2] && m[1].trim()) out.push([m[1].trim(), m[2].trim()])
+  }
+  return out.length >= 2 ? out : []
+}
+
 // ponytail: parses single-word-headed "Word: example." pairs (langExpr/guideVocab shape);
 // multi-word heads ("Identifying and naming:") are function sections, not vocab — see LabeledSections.
 export function parsePairs(text) {
