@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, QuizList, VideoBlock, VocabTable, WordsToFix, parsePairs, parseTable } from '@/components/lessons'
+import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, QuestionPractice, QuizList, VideoBlock, VocabTable, WordsToFix, parsePairs, parseTable } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -61,7 +61,7 @@ export default function LessonPlayer() {
       return
     }
     setError(''); setResult(null); setLive('')
-    const task = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
+    const task = tasks.find((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || ''))
     if (!task) { setError('No speaking task on this module yet.'); return }
     if (SR) {
       const r = new SR()
@@ -123,6 +123,15 @@ export default function LessonPlayer() {
     } catch (e) { setError(e.message) } finally { setSubmitting(false) }
   }
 
+  // Question rows are formative: transcription + fluency on screen, nothing stored.
+  async function answerQuestion(task, transcribed, durationSec) {
+    const json = await authFetch(`/tasks/${task.id}/submit-text`, {
+      method: 'POST',
+      body: JSON.stringify({ transcribed, duration_sec: durationSec }),
+    })
+    return { fluency: json.fluency_score || 0, wpm: json.wpm || 0 }
+  }
+
   // ponytail: newest-wins per task — retries overwrite, chapter verdict
   // always describes current ability; progress-over-time needs log reads.
   function storeAttempt(taskId, json) {
@@ -150,7 +159,7 @@ export default function LessonPlayer() {
   }
 
   async function submit(blob) {
-  const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
+  const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || ''))
     if (!speakTask) { setError('No speaking task on this module yet.'); return }
     setSubmitting(true)
     try {
@@ -174,7 +183,7 @@ export default function LessonPlayer() {
   const idx = siblings.findIndex((m) => m.id === id)
   const prev = idx > 0 ? siblings[idx - 1] : null
   const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null
-  const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING')
+  const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || ''))
   // Supervisor rule: module-level mic only in Guided/Independent Speaking courses.
   const canRecord = /guided|independent/i.test(courseTitle)
   // ponytail: title/punctuation sniffing routes MONOLOGUE flavors (Kinds/Core/
@@ -182,7 +191,10 @@ export default function LessonPlayer() {
   const body = module?.target_transcript || ''
   const isFunc = /function|grammar/i.test(module?.title || '')
   const pairRows = !isFunc ? parsePairs(body) : []
-  const tableRows = !isFunc && !pairRows.length ? parseTable(body) : []
+  let tableRows = !isFunc && !pairRows.length ? parseTable(body) : []
+  // ponytail: glossary modules keep pairs in content_text (transcript empty) —
+  // content fallback is table-only so guiding-question prose never collapses.
+  if (!isFunc && !body.trim() && !tableRows.length) tableRows = parseTable(module?.content_text || '')
   const isBareList = !isFunc && body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
   // Table-name lists ("from Table 2.1") are display-first: no mic by supervisor call.
   const isTableList = !!isBareList && /from Table/i.test(module?.content_text || '')
@@ -280,6 +292,8 @@ export default function LessonPlayer() {
             )}
 
             <QuizList tasks={tasks} />
+
+            <QuestionPractice tasks={tasks} onAnswer={answerQuestion} />
 
             {(module.type === 'DIALOGUE' || module.type === 'VIDEO' || pairRows.length > 0 || isBareList) && error && <p className="text-sm text-red-600 mt-3 text-center">{error}</p>}
 

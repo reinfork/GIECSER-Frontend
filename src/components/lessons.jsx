@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, ExternalLink, Mic, Volume2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -144,20 +144,21 @@ export function VocabTable({ pairs, words }) {
   )
 }
 
-// ponytail: SpeechRecognition is Chrome/Edge-only — mic hides elsewhere, TTS
-// speaker stays; transcription-only by supervisor call, no scoring path.
-function VocabRow({ word, example }) {
-  const [heard, setHeard] = useState('')
+// ponytail: one hook for all mic rows (vocab, questions) — the module mic
+// keeps its own flow (upload fallback + chapter aggregate). Chrome/Edge-only:
+// mic hides elsewhere, TTS speaker stays.
+function useSpeechRecognition(onFinal) {
   const [live, setLive] = useState('')
   const [on, setOn] = useState(false)
+  const startedAt = useRef(0)
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
   function listen() {
-    if (!SR) return
-    if (on) return
+    if (!SR || on) return
     const r = new SR()
     r.lang = 'en-US'
     r.interimResults = true
     r.maxAlternatives = 1
+    startedAt.current = Date.now()
     setOn(true); setLive('')
     r.onresult = (e) => {
       let interim = '', fin = ''
@@ -166,12 +167,19 @@ function VocabRow({ word, example }) {
         else interim += res[0].transcript
       }
       if (interim) setLive(interim)
-      if (fin) { setHeard(fin); setLive(''); setOn(false) }
+      if (fin) { setLive(''); setOn(false); onFinal(fin, (Date.now() - startedAt.current) / 1000) }
     }
     r.onend = () => { setOn(false); setLive('') }
     r.onerror = () => { setOn(false); setLive('') }
     try { r.start() } catch { setOn(false) }
   }
+  return { SR, live, on, listen }
+}
+
+// ponytail: transcription-only by supervisor call, no scoring path.
+function VocabRow({ word, example }) {
+  const [heard, setHeard] = useState('')
+  const { SR, live, on, listen } = useSpeechRecognition((fin) => setHeard(fin))
   // ponytail: local string-match verdict — real phoneme scoring stays in the
   // Groq module pipeline; per-word backend check replaces this when it exists.
   const norm = (s) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -204,6 +212,56 @@ function VocabRow({ word, example }) {
         </button>
       </TableCell>
     </TableRow>
+  )
+}
+
+// ponytail: fluency-only rows — the book gives no answer keys, so accuracy has
+// nothing honest to compare against; results stay formative (no chapter
+// aggregate), accuracy lights up when keys seed.
+export function QuestionPractice({ tasks, onAnswer }) {
+  const qs = (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && /\?\s*$/.test(t.prompt || ''))
+  if (!qs.length) return null
+  return (
+    <div className="mt-4 space-y-3">
+      {qs.map((t) => <QuestionRow key={t.id} task={t} onAnswer={onAnswer} />)}
+    </div>
+  )
+}
+
+function QuestionRow({ task, onAnswer }) {
+  const [heard, setHeard] = useState('')
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const { SR, live, on, listen } = useSpeechRecognition(async (fin, secs) => {
+    setHeard(fin); setRes(null); setErr('')
+    if (!onAnswer) return
+    setBusy(true)
+    try { setRes(await onAnswer(task, fin, secs)) }
+    catch (e) { setErr(e.message || 'Assessment failed, try again') }
+    finally { setBusy(false) }
+  })
+  return (
+    <Card className="py-4">
+      <CardContent className="text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium leading-relaxed">{task.prompt}</p>
+          {SR && (
+            <button onClick={listen} aria-label="Answer aloud" className={cn('shrink-0 rounded-full bg-secondary p-1.5 hover:bg-secondary/70', on && 'animate-pulse bg-red-100 text-red-600')}>
+              <Mic className="size-4" />
+            </button>
+          )}
+        </div>
+        {on && live && <p className="mt-1.5 text-xs text-muted-foreground animate-pulse">&ldquo;{live}&rdquo;</p>}
+        {busy && <p className="mt-1.5 text-xs text-muted-foreground">Scoring...</p>}
+        {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
+        {heard && res && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            You said: &ldquo;{heard}&rdquo; · <b className="text-foreground">{Math.round(res.fluency)} fluency</b> · {Math.round(res.wpm)} wpm
+          </p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -273,12 +331,15 @@ export function GlossaryTable({ rows }) {
   )
 }
 
-// ponytail: "Name => Meaning." table rows (Table 1 shape) — tried before
-// parsePairs since game names are multi-word; "=>" never occurs in prose.
+// ponytail: "Name => Meaning." table rows — entries split on ";;" so glosses
+// keep natural periods/parens; sentence-split is legacy fallback. "=>" never
+// occurs in prose, so neither path misfires on passages.
 export function parseTable(text) {
+  const raw = String(text || '')
+  const segs = raw.includes(';;') ? raw.split(/\s*;;\s*/) : raw.split(/(?<=[.?!])\s+/)
   const out = []
-  for (const seg of String(text || '').split(/(?<=[.?!])\s+/)) {
-    const m = seg.match(/^(.+?)\s*=>\s*(.+[.?!])?\s*$/)
+  for (const seg of segs) {
+    const m = seg.match(/^(.+?)\s*=>\s*(.+?)\s*$/)
     if (m && m[2] && m[1].trim()) out.push([m[1].trim(), m[2].trim()])
   }
   return out.length >= 2 ? out : []
