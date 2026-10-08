@@ -2,7 +2,17 @@ export const API = import.meta.env.VITE_API_BASE
 
 export const getToken = () => localStorage.getItem('token')
 // profile: {kind:'teacher', email} | {kind:'session', expires_at}
-export const getProfile = () => JSON.parse(localStorage.getItem('asri_profile') || 'null')
+export const getProfile = () => {
+  const p = JSON.parse(localStorage.getItem('asri_profile') || 'null')
+  // ponytail: client-read expiry only — server 401s remain the authority;
+  // add silent refresh when logouts-from-expiry annoy anyone.
+  if (p?.kind === 'session' && p.expires_at && new Date(p.expires_at) < new Date()) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('asri_profile')
+    return null
+  }
+  return p
+}
 export const getKind = () => getProfile()?.kind || null
 // ponytail: read per render, no subscriptions — single shared class session; add store when live multi-user state appears
 

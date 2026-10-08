@@ -38,7 +38,7 @@ function Reflection({ id }) {
     try { localStorage.setItem(`asri_reflect_${id}`, JSON.stringify(next)) } catch { /* best-effort */ }
   }
   return (
-    <Shell back={`/chapters/${id}`} title="Self Reflection" desc="Setelah memperoleh feedback dari ASR PLATFORM, siswa mengevaluasi dirinya sendiri.">
+    <Shell back={`/chapters/${id}`} title="Self Reflection" desc="">
       <Card className="mt-4">
         <CardContent className="pt-6 space-y-4 text-sm">
           {YES_NO.map((q, i) => (
@@ -82,7 +82,7 @@ function Mastery({ id }) {
     .sort((a, b) => a.word_accuracy - b.word_accuracy)
     .slice(0, 3)
   return (
-    <Shell back={`/chapters/${id}`} title="Re-practice & Mastery" desc="Siswa berlatih kembali. Kalau Goal setting sudah tercapai, lakukan enrichment. Kalau belum tercapai, lakukan re-practice.">
+    <Shell back={`/chapters/${id}`} title="Re-practice & Mastery" desc="">
       <ChapterFeedbackPanel chapterId={id} />
       {weak.length > 0 && (
         <Card className="mt-4">

@@ -18,8 +18,8 @@ const RequireAuth = ({ children }) =>
   getToken() ? children : <Navigate to="/" replace />
 const RequireTeacher = ({ children }) =>
   getToken() && getKind() === 'teacher' ? children : <Navigate to="/teacher/login" replace />
-const GuestOnly = ({ children, to = '/dashboard' }) =>
-  getToken() ? <Navigate to={to} replace /> : children
+const GuestOnly = ({ children, to = '/teacher' }) =>
+  getKind() === 'teacher' ? <Navigate to={to} replace /> : children
 
 const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
