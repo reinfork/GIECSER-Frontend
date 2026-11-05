@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { KeyRound, LogOut, Plus } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { KeyRound, LogOut, Plus, Star } from 'lucide-react'
 import { authFetch, getProfile, logout } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -43,6 +43,9 @@ export default function Teacher() {
             Teacher Panel <span className="text-xs font-normal text-muted-foreground">{profile?.email}</span>
           </div>
           <div className="flex gap-2">
+            <Link to="/teacher/scores">
+              <Button variant="outline" size="sm"><Star className="size-4" /> Nilai</Button>
+            </Link>
             <Button variant="outline" size="sm" onClick={() => { logout(); navigate('/') }}>
               <LogOut className="size-4" /> Logout
             </Button>

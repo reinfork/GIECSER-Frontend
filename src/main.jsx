@@ -7,6 +7,7 @@ import Layout from './layout.jsx'
 import Landing from './pages/Landing.jsx'
 import TeacherLogin from './pages/TeacherLogin.jsx'
 import Teacher from './pages/Teacher.jsx'
+import Scores from './pages/Scores.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Courses from './pages/Courses.jsx'
 import CourseDetail from './pages/CourseDetail.jsx'
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
   { path: '/', element: <Landing /> },
   { path: '/teacher/login', element: <GuestOnly to="/teacher"><TeacherLogin /></GuestOnly> },
   { path: '/teacher', element: <RequireTeacher><Teacher /></RequireTeacher> },
+  { path: '/teacher/scores', element: <RequireTeacher><Scores /></RequireTeacher> },
   {
     element: <RequireAuth><Layout /></RequireAuth>,
     children: [

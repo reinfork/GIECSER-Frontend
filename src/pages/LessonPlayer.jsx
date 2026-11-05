@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, QuestionPractice, QuizList, VideoBlock, VocabTable, WordsToFix, parsePairs, parseTable } from '@/components/lessons'
+import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, QuestionPractice, QuizList, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -195,6 +195,7 @@ export default function LessonPlayer() {
   // ponytail: glossary modules keep pairs in content_text (transcript empty) —
   // content fallback is table-only so guiding-question prose never collapses.
   if (!isFunc && !body.trim() && !tableRows.length) tableRows = parseTable(module?.content_text || '')
+  const storyBits = tasks.some((t) => { try { return !!JSON.parse(t.options_json || '{}').sentences } catch { return false } }) ? parseStory(body) : []
   const isBareList = !isFunc && body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
   // Table-name lists ("from Table 2.1") are display-first: no mic by supervisor call.
   const isTableList = !!isBareList && /from Table/i.test(module?.content_text || '')
@@ -242,6 +243,8 @@ export default function LessonPlayer() {
               </Card>
             ) : isFunc ? (
               <LabeledSections text={body || module.content_text} />
+            ) : storyBits.length ? (
+              <StoryOrder bits={storyBits} />
             ) : pairRows.length ? (
               <VocabTable pairs={pairRows} />
             ) : tableRows.length ? (

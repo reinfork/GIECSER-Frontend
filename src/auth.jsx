@@ -35,16 +35,17 @@ export async function teacherLogin(email, password) {
   return data
 }
 
-// validatePin exchanges a 6-char classroom code for a session opening the whole book.
-export async function validatePin(code) {
+// validatePin exchanges a 6-char classroom code + student name for a session
+// opening the whole book. Name is mandatory: scores attribute per student.
+export async function validatePin(code, name) {
   const res = await fetch(`${API}/access/validate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: code.trim().toUpperCase() }),
+    body: JSON.stringify({ code: code.trim().toUpperCase(), name: name.trim() }),
   })
   const data = parseOrThrow(await res.text(), res, 'Invalid or expired code')
   localStorage.setItem('token', data.token)
-  localStorage.setItem('asri_profile', JSON.stringify({ kind: 'session', expires_at: data.expires_at }))
+  localStorage.setItem('asri_profile', JSON.stringify({ kind: 'session', name: name.trim(), code: code.trim().toUpperCase(), expires_at: data.expires_at }))
   return data
 }
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Check, ExternalLink, Mic, Volume2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
@@ -92,6 +93,11 @@ export function VideoBlock({ url }) {
 
 function safeParse(s) {
   try { return s ? JSON.parse(s) : null } catch { return null }
+}
+
+// Ordering tasks render inside StoryOrder, not as quiz cards.
+function hasSentences(t) {
+  return !!safeParse(t.options_json)?.sentences
 }
 
 // ponytail: hardcoded AvaMultilingual voice (supervisor pick) with en-voice
@@ -331,6 +337,60 @@ export function GlossaryTable({ rows }) {
   )
 }
 
+// ponytail: shape-detected (options carry "sentences" + lettered transcript) —
+// an explicit task subtype ends the sniffing. Ungraded: keys are stripped by
+// Task.Public, checking arrives with a check endpoint, not before.
+export function parseStory(text) {
+  const out = []
+  for (const seg of String(text || '').split(/(?=[A-F]\.\s)/g)) {
+    const m = seg.match(/^([A-F])\.\s*([\s\S]+?)\s*$/)
+    if (m) out.push([m[1], m[2].trim()])
+  }
+  return out.length >= 2 ? out : []
+}
+
+export function StoryOrder({ bits }) {
+  const [order, setOrder] = useState([])
+  if (!bits?.length) return null
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="grid gap-2">
+        {bits.map(([l, s]) => {
+          const pos = order.indexOf(l)
+          return (
+            <button
+              key={l}
+              onClick={() => setOrder(pos < 0 ? [...order, l] : order.filter((x) => x !== l))}
+              className={cn(
+                'flex items-center gap-3 text-left rounded-xl border px-4 py-2.5 text-sm transition-colors',
+                pos < 0 ? 'hover:bg-accent' : 'bg-primary text-primary-foreground border-primary'
+              )}
+            >
+              <span className={cn('w-6 h-6 rounded-md grid place-items-center text-xs font-bold shrink-0', pos < 0 ? 'bg-secondary' : 'bg-primary-foreground/20')}>
+                {pos < 0 ? l : pos + 1}
+              </span>
+              <span className={pos < 0 ? 'text-muted-foreground' : ''}>{s}</span>
+            </button>
+          )
+        })}
+      </div>
+      <Card className="py-4">
+        <CardContent className="text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-semibold">Your order {order.length > 0 && <span className="text-muted-foreground font-normal">— {order.join(' → ')}</span>}</div>
+            {order.length > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => setOrder([])} className="rounded-full">
+                Reset
+              </Button>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Tap a picked sentence again to unpick. Say your answer aloud.</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // ponytail: "Name => Meaning." table rows — entries split on ";;" so glosses
 // keep natural periods/parens; sentence-split is legacy fallback. "=>" never
 // occurs in prose, so neither path misfires on passages.
@@ -393,7 +453,7 @@ export function QuizList({ tasks }) {
   if (!tasks?.length) return null
   return (
     <div className="mt-4 space-y-3">
-      {tasks.filter((t) => t.type !== 'SPEAKING_RECORDING').map((t, i) => {
+      {tasks.filter((t) => t.type !== 'SPEAKING_RECORDING' && !hasSentences(t)).map((t, i) => {
         const opt = safeParse(t.options_json)
         return (
           <Card key={t.id} className="py-4">

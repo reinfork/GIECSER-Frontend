@@ -10,13 +10,14 @@ import { Input } from '@/components/ui/input'
 function PinCard() {
   const navigate = useNavigate()
   const [code, setCode] = useState('')
+  const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   async function onSubmit(e) {
     e.preventDefault()
     setLoading(true); setError('')
-    try { await validatePin(code); navigate('/dashboard') }
+    try { await validatePin(code, name); navigate('/dashboard') }
     catch (err) { setError(err.message) }
     finally { setLoading(false) }
   }
@@ -28,13 +29,19 @@ function PinCard() {
         <CardDescription>Masukkan 6 digit kode dari gurumu untuk mulai belajar</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={onSubmit} className="flex gap-2">
+        <form onSubmit={onSubmit} className="space-y-2">
           <Input
-            value={code} onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="RIAU89" maxLength={6} required
-            className="uppercase tracking-[0.3em] text-center font-mono"
+            value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Nama kamu" maxLength={60} required minLength={2}
           />
-          <Button type="submit" disabled={loading}>{loading ? '...' : 'Mulai'}</Button>
+          <div className="flex gap-2">
+            <Input
+              value={code} onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="RIAU89" maxLength={6} required minLength={6}
+              className="uppercase tracking-[0.3em] text-center font-mono"
+            />
+            <Button type="submit" disabled={loading}>{loading ? '...' : 'Mulai'}</Button>
+          </div>
         </form>
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mt-3">{error}</div>}
       </CardContent>
