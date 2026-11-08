@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
+import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
 import { SectionGate } from '@/components/feedback'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -258,7 +258,7 @@ export default function LessonPlayer() {
             ) : pairRows.length ? (
               <VocabTable pairs={pairRows} />
             ) : tableRows.length ? (
-              <GlossaryTable rows={tableRows} />
+              <GlossaryTable rows={tableRows} speakMeaning={!/indonesian/i.test(module?.content_text || '')} />
             ) : isBareList ? (
               <VocabTable words={body.trim().split(/[\s,]+/).filter(Boolean)} />
             ) : !speakTask && module.type !== 'QUIZ' ? (
@@ -314,6 +314,8 @@ export default function LessonPlayer() {
             <ObjectivesChecklist tasks={tasks} />
 
             <QuestionPractice tasks={tasks} onAnswer={answerQuestion} />
+
+            <RepeatPractice tasks={tasks} onAnswer={answerQuestion} active={!canRecord} />
 
             {(module.type === 'DIALOGUE' || module.type === 'VIDEO' || pairRows.length > 0 || isBareList) && error && <p className="text-sm text-red-600 mt-3 text-center">{error}</p>}
 

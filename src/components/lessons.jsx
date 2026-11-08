@@ -48,10 +48,7 @@ export function DialogueScript({ text }) {
         if (!t.speaker) {
           return (
             <p key={i} className="text-sm text-muted-foreground">
-              {t.line}{' '}
-              <button onClick={() => speakText(t.line)} aria-label="Hear narration" className="align-middle hover:text-foreground">
-                <Volume2 className="size-3.5 inline" />
-              </button>
+              {t.line} <CellListen text={t.line} label="Hear narration" />
             </p>
           )
         }
@@ -134,11 +131,33 @@ function speakText(line) {
 }
 
 // ponytail: fire-and-forget TTS, no pause/resume — add when passages outgrow one breath.
+// One uniform control family: solid primary + shadow + lift so every
+// listen/speak affordance reads as a button. Fixed icon sizing ends the
+// giant-icon class for good.
+const pressable = 'transition hover:-translate-y-px hover:shadow-lg active:translate-y-0 active:shadow-md'
+
 export function ListenButton({ text }) {
   if (!String(text || '').trim()) return null
   return (
-    <button onClick={() => speakText(text)} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium hover:bg-secondary/70">
+    <button onClick={() => speakText(text)} title="Listen" className={`inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-md ${pressable}`}>
       <Volume2 className="size-4" /> Listen
+    </button>
+  )
+}
+
+export function CellListen({ text, label }) {
+  if (!String(text || '').trim()) return null
+  return (
+    <button onClick={() => speakText(text)} title={label || 'Listen'} aria-label={label || 'Listen'} className={`ml-1 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary align-middle text-primary-foreground shadow-md ${pressable}`}>
+      <Volume2 className="size-4" />
+    </button>
+  )
+}
+
+export function MicButton({ onClick, on, label }) {
+  return (
+    <button onClick={onClick} title={label || 'Speak'} aria-label={label || 'Speak'} className={cn('inline-flex size-7 shrink-0 items-center justify-center rounded-full text-primary-foreground shadow-md', pressable, on ? 'animate-pulse bg-red-500' : 'bg-primary')}>
+      <Mic className="size-4" />
     </button>
   )
 }
@@ -222,17 +241,11 @@ export function VocabRow({ word, example }) {
         )}
       </TableCell>
       <TableCell>
-        {SR && (
-          <button onClick={listen} aria-label={`Say ${word}`} className={cn('rounded-full bg-secondary p-1.5 hover:bg-secondary/70', on && 'animate-pulse bg-red-100 text-red-600')}>
-            <Mic className="size-4" />
-          </button>
-        )}
+        {SR && <MicButton onClick={listen} on={on} label={`Say ${word}`} />}
       </TableCell>
       {example != null && <TableCell className="text-muted-foreground whitespace-normal">{example}</TableCell>}
       <TableCell className="text-right">
-        <button onClick={() => speakText(word)} aria-label={`Hear ${word}`} className="text-muted-foreground hover:text-foreground">
-          <Volume2 className="size-4" />
-        </button>
+        <CellListen text={word} label={`Hear ${word}`} />
       </TableCell>
     </TableRow>
   )
@@ -311,13 +324,58 @@ function QuestionRow({ task, onAnswer }) {
       <CardContent className="text-sm">
         <div className="flex items-center justify-between gap-2">
           <p className="font-medium leading-relaxed">{task.prompt}</p>
-          {SR && (
-            <button onClick={listen} aria-label="Answer aloud" className={cn('shrink-0 rounded-full bg-secondary p-1.5 hover:bg-secondary/70', on && 'animate-pulse bg-red-100 text-red-600')}>
-              <Mic className="size-4" />
-            </button>
-          )}
+          {SR && <MicButton onClick={listen} on={on} label="Answer aloud" />}
         </div>
         {model && <p className="mt-1.5 text-xs text-muted-foreground">Answer: {model}</p>}
+        {on && live && <p className="mt-1.5 text-xs text-muted-foreground animate-pulse">&ldquo;{live}&rdquo;</p>}
+        {busy && <p className="mt-1.5 text-xs text-muted-foreground">Scoring...</p>}
+        {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
+        {heard && res && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            You said: &ldquo;{heard}&rdquo; · <b className="text-foreground">{Math.round(res.fluency)} fluency</b> · {Math.round(res.wpm)} wpm
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Repeat-aloud rows for repeat/read tasks (non-? speaking, no model key).
+// These have no module mic outside Guided/Independent courses, so without
+// this they are seeded and gated but unsubmittable. Same submit-text flow
+// as question rows; the module mic covers them where canRecord is true.
+export function RepeatPractice({ tasks, onAnswer, active }) {
+  const reps = active
+    ? (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || '') && !hasModel(t))
+    : []
+  if (!reps.length) return null
+  return (
+    <div className="mt-4 space-y-3">
+      {reps.map((t) => <RepeatRow key={t.id} task={t} onAnswer={onAnswer} />)}
+    </div>
+  )
+}
+
+function RepeatRow({ task, onAnswer }) {
+  const [heard, setHeard] = useState('')
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const { SR, live, on, listen } = useSpeechRecognition(async (fin, secs) => {
+    setHeard(fin); setRes(null); setErr('')
+    if (!onAnswer) return
+    setBusy(true)
+    try { setRes(await onAnswer(task, fin, secs)) }
+    catch (e) { setErr(e.message || 'Assessment failed, try again') }
+    finally { setBusy(false) }
+  })
+  return (
+    <Card className="py-4">
+      <CardContent className="text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium leading-relaxed">{task.prompt}</p>
+          {SR && <MicButton onClick={listen} on={on} label="Read aloud" />}
+        </div>
         {on && live && <p className="mt-1.5 text-xs text-muted-foreground animate-pulse">&ldquo;{live}&rdquo;</p>}
         {busy && <p className="mt-1.5 text-xs text-muted-foreground">Scoring...</p>}
         {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
@@ -371,7 +429,10 @@ export function WordsToFix({ reference, transcribed, words }) {
 // ponytail: display-only book glossary (Table 1 shape) — deliberately separate
 // from VocabTable (practice: speaker/mic/verdict); merging them regrows
 // prop-flags. A "No" column mirrors the book numbering (seed order = book order).
-export function GlossaryTable({ rows }) {
+// shortcut: meaning-column TTS suppressed only when the module declares
+// Indonesian glosses ("Indonesian" in content_text — today just Boat Parts);
+// an explicit per-module lang flag replaces the sniff when content grows.
+export function GlossaryTable({ rows, speakMeaning = true }) {
   if (!rows?.length) return null
   return (
     <Card className="mt-4 py-0 overflow-hidden">
@@ -388,16 +449,12 @@ export function GlossaryTable({ rows }) {
             <TableRow key={i}>
               <TableCell className="text-muted-foreground">{i + 1}</TableCell>
               <TableCell className="font-medium whitespace-normal">
-                {w}{' '}
-                <button onClick={() => speakText(w)} aria-label={`Hear ${w}`} className="align-middle text-muted-foreground hover:text-foreground">
-                  <Volume2 className="size-3.5 inline" />
-                </button>
+                {w}
+                <CellListen text={w} label={`Hear ${w}`} />
               </TableCell>
               <TableCell className="text-muted-foreground whitespace-normal">
-                {m}{' '}
-                <button onClick={() => speakText(m)} aria-label="Hear meaning" className="align-middle hover:text-foreground">
-                  <Volume2 className="size-3.5 inline" />
-                </button>
+                {m}
+                {speakMeaning && <CellListen text={m} label="Hear meaning" />}
               </TableCell>
             </TableRow>
           ))}

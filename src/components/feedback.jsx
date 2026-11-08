@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,12 +11,15 @@ export function readJSON(key, fallback) {
   } catch { return fallback }
 }
 
-// SectionGate shows the student's recorded scores for one section: speaking
+// SectionGate shows the student's recorded average for one section: speaking
 // tasks in same-course modules before the gate (whole chapter when empty).
 // Pass needs every scope task attempted with average word accuracy >= 80.
+// The verdict reuses the chapter-feedback AI call over the gate's attempts.
 export function SectionGate({ chapterId, gateModuleId }) {
   const [gate, setGate] = useState(null)
   const [error, setError] = useState('')
+  const [verdict, setVerdict] = useState(null)
+  const [busy, setBusy] = useState(false)
   useEffect(() => {
     let live = true
     authFetch(`/my/scores?chapter_id=${chapterId}&before_module_id=${gateModuleId}`)
@@ -25,40 +27,62 @@ export function SectionGate({ chapterId, gateModuleId }) {
       .catch((e) => { if (live) setError(e.message) })
     return () => { live = false }
   }, [chapterId, gateModuleId])
-  const byTask = Object.fromEntries((gate?.rows || []).map((r) => [r.task_id, r]))
-  const weak = [...(gate?.scope || [])].sort(
-    (a, b) => (byTask[a.task_id]?.word_accuracy_score ?? -1) - (byTask[b.task_id]?.word_accuracy_score ?? -1)
-  )
+  async function generate() {
+    if (!gate) return
+    setBusy(true); setError('')
+    try {
+      const byTask = Object.fromEntries((gate.rows || []).map((r) => [r.task_id, r]))
+      const attempts = gate.scope.filter((t) => byTask[t.task_id]).map((t) => {
+        const r = byTask[t.task_id]
+        return {
+          task_id: t.task_id, reference: t.reference || '', transcribed: r.transcribed_text || '',
+          word_accuracy: r.word_accuracy_score || 0, fluency: r.fluency_score || 0,
+          pronunciation: r.pronunciation_score || 0, wpm: r.wpm || 0, phonetic_words: [],
+        }
+      })
+      setVerdict(await authFetch(`/chapters/${chapterId}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify({ attempts }),
+      }))
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const n = gate?.scope.length || 0
   return (
     <Card className="mt-4">
       <CardHeader>
         <CardTitle>Section score</CardTitle>
         <CardDescription>
           {!gate && !error ? 'Loading recorded scores…'
-            : gate.scope.length === 0 ? 'No scored speaking tasks in this section yet.'
-            : `${gate.attempted} of ${gate.scope.length} tasks recorded · average ${Math.round(gate.average)}%`}
+            : n === 0 ? 'No scored speaking tasks in this section yet.'
+            : `${gate.attempted} of ${n} tasks recorded · average ${Math.round(gate.average)}%`}
         </CardDescription>
       </CardHeader>
-      {(gate?.scope.length > 0 || error) && (
-        <CardContent className="space-y-2 text-sm">
+      {(n > 0 || error) && (
+        <CardContent className="space-y-3 text-sm">
           {error && <p className="text-sm text-red-600">{error}</p>}
-          {gate && (gate.pass
+          {gate && n > 0 && (gate.pass
             ? <p className="text-sm text-green-700">Average 80%+ reached — continue to the next steps.</p>
-            : <p className="text-sm text-amber-700">Below 80% average — re-practice the weakest tasks, then continue.</p>)}
-          {weak.map((t) => {
-            const s = byTask[t.task_id]
-            return (
-              <div key={t.task_id} className="flex items-center justify-between gap-3">
-                <span className="truncate">{t.module_title}</span>
-                <span className="flex items-center gap-2 shrink-0">
-                  <Badge variant="secondary">{s ? `${Math.round(s.word_accuracy_score)}%` : '—'}</Badge>
-                  <Button size="sm" variant="outline" asChild>
-                    <Link to={`/modules/${t.module_id}`}>Practice</Link>
-                  </Button>
+            : <p className="text-sm text-amber-700">Below 80% average — re-practice this section, then generate feedback again.</p>)}
+          {gate && n > 0 && (
+            <Button onClick={generate} disabled={busy || gate.attempted === 0} className="rounded-full">
+              {busy ? 'Generating...' : verdict ? 'Regenerate section feedback' : 'Generate section feedback'}
+            </Button>
+          )}
+          {verdict && (
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex items-center gap-2">
+                <Badge>{verdict.overall_band}</Badge>
+                <span className="text-muted-foreground">
+                  {Math.round(verdict.avg_accuracy)}% accuracy · {Math.round(verdict.avg_fluency)} fluency
                 </span>
               </div>
-            )
-          })}
+              {verdict.next_steps?.length > 0 && (
+                <ul className="list-disc list-inside text-muted-foreground">
+                  {verdict.next_steps.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
