@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, QuestionPractice, QuizList, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
+import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -132,6 +132,14 @@ export default function LessonPlayer() {
     return { fluency: json.fluency_score || 0, wpm: json.wpm || 0 }
   }
 
+  // Reveal-after-attempt: key comes back inside the response, nothing stored.
+  async function checkAnswer(task, answer) {
+    return authFetch(`/tasks/${task.id}/check`, {
+      method: 'POST',
+      body: JSON.stringify({ answer }),
+    })
+  }
+
   // ponytail: newest-wins per task — retries overwrite, chapter verdict
   // always describes current ability; progress-over-time needs log reads.
   function storeAttempt(taskId, json) {
@@ -232,6 +240,7 @@ export default function LessonPlayer() {
                 <CardContent className="pt-6">
                   <p className="text-muted-foreground text-sm">{module.content_text}</p>
                   <DialogueScript text={module.target_transcript} />
+                  {speakTask && canRecord && <RolePlay text={module.target_transcript} />}
                   {speakTask && canRecord && (
                     <div className="text-center">
                       <Button size="lg" onClick={toggleRecording} disabled={submitting} className="mt-6 rounded-full">
@@ -244,7 +253,7 @@ export default function LessonPlayer() {
             ) : isFunc ? (
               <LabeledSections text={body || module.content_text} />
             ) : storyBits.length ? (
-              <StoryOrder bits={storyBits} />
+              <StoryOrder bits={storyBits} task={tasks.find((t) => { try { return !!JSON.parse(t.options_json || '{}').sentences } catch { return false } })} onCheck={checkAnswer} />
             ) : pairRows.length ? (
               <VocabTable pairs={pairRows} />
             ) : tableRows.length ? (
@@ -294,7 +303,9 @@ export default function LessonPlayer() {
               </p>
             )}
 
-            <QuizList tasks={tasks} />
+            <QuizList tasks={tasks} onCheck={checkAnswer} />
+
+            <ObjectivesChecklist tasks={tasks} />
 
             <QuestionPractice tasks={tasks} onAnswer={answerQuestion} />
 
@@ -304,6 +315,11 @@ export default function LessonPlayer() {
               <Card className="mt-4">
                 <CardHeader>
                   <CardTitle>Score: {Math.round(result.pronunciation_score ?? result.word_accuracy_score)}%</CardTitle>
+                  {(result.pronunciation_score ?? result.word_accuracy_score) >= 80 ? (
+                    <CardDescription>80%+ reached — continue to the next steps.</CardDescription>
+                  ) : (
+                    <CardDescription>Below 80% — re-practice this section, then continue.</CardDescription>
+                  )}
                   <CardDescription>&ldquo;{result.transcribed_text}&rdquo;</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 text-sm">

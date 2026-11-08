@@ -24,7 +24,7 @@ export function GoalBlock({ content, transcript }) {
 }
 
 // ponytail: naive "Name:" split — misfires on mid-sentence caps like "Hi Dave: ok"; proper script lines when seeds gain newlines.
-export function DialogueScript({ text }) {
+function parseTurns(text) {
   const turns = []
   const re = /([A-Z][a-zA-Z.'-]*:)/g
   let pending = null
@@ -36,6 +36,10 @@ export function DialogueScript({ text }) {
     const line = (chunks[i + 1] || '').trim()
     if (line) turns.push({ speaker: pending, line })
   }
+  return turns
+}
+export function DialogueScript({ text }) {
+  const turns = parseTurns(text)
   if (!turns.length) return <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
   const speakers = [...new Set(turns.filter((t) => t.speaker).map((t) => t.speaker))]
   return (
@@ -70,10 +74,11 @@ export function DialogueScript({ text }) {
   )
 }
 
-// ponytail: Drive preview iframe (both VIDEO seeds are uc?export=download links, not streamable mp4); native <video> only for direct file urls, upgrade when seeds carry real mp4s.
+// ponytail: Drive ?id= preview + YouTube embeds; native <video> only for direct file urls.
 export function VideoBlock({ url }) {
   if (!url) return null
   const id = String(url).match(/[?&]id=([-\w]+)/)?.[1]
+  const yt = String(url).match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/)?.[1]
   if (id) {
     return (
       <div className="mt-4">
@@ -82,6 +87,18 @@ export function VideoBlock({ url }) {
         </div>
         <a href={url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-primary">
           <ExternalLink className="size-4" /> Open in Drive
+        </a>
+      </div>
+    )
+  }
+  if (yt) {
+    return (
+      <div className="mt-4">
+        <div className="aspect-video w-full overflow-hidden rounded-xl border">
+          <iframe src={`https://www.youtube.com/embed/${yt}`} className="h-full w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Lesson video" />
+        </div>
+        <a href={url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm text-primary">
+          <ExternalLink className="size-4" /> Watch on YouTube
         </a>
       </div>
     )
@@ -183,7 +200,7 @@ function useSpeechRecognition(onFinal) {
 }
 
 // ponytail: transcription-only by supervisor call, no scoring path.
-function VocabRow({ word, example }) {
+export function VocabRow({ word, example }) {
   const [heard, setHeard] = useState('')
   const { SR, live, on, listen } = useSpeechRecognition((fin) => setHeard(fin))
   // ponytail: local string-match verdict — real phoneme scoring stays in the
@@ -221,11 +238,47 @@ function VocabRow({ word, example }) {
   )
 }
 
-// ponytail: fluency-only rows — the book gives no answer keys, so accuracy has
-// nothing honest to compare against; results stay formative (no chapter
-// aggregate), accuracy lights up when keys seed.
+// ponytail: formative per-role practice — transcription verdicts only, no
+// scoring path or chapter aggregate; a scored per-role check replaces this
+// when the brief asks for it.
+export function RolePlay({ text }) {
+  const turns = parseTurns(text)
+  const speakers = [...new Set(turns.filter((t) => t.speaker).map((t) => t.speaker))]
+  const [role, setRole] = useState(speakers[0] || null)
+  if (!speakers.length) return null
+  const active = role || speakers[0]
+  const lines = turns.filter((t) => t.speaker === active)
+  return (
+    <Card className="mt-4 py-0 overflow-hidden">
+      <div className="px-4 pt-4 flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold">Practice one role</span>
+        {speakers.map((s) => (
+          <Button key={s} size="sm" variant={active === s ? 'default' : 'secondary'} onClick={() => setRole(s)} className="rounded-full">
+            {s}
+          </Button>
+        ))}
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Line</TableHead>
+            <TableHead className="w-10" />
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {lines.map((t, i) => <VocabRow key={i} word={t.line} example={null} />)}
+        </TableBody>
+      </Table>
+    </Card>
+  )
+}
+
+// ponytail: fluency-only rows — results stay formative (no chapter
+// aggregate). A visible Model answer shows outright; accuracy lights up
+// when keys seed.
 export function QuestionPractice({ tasks, onAnswer }) {
-  const qs = (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && /\?\s*$/.test(t.prompt || ''))
+  const qs = (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && (/\?\s*$/.test(t.prompt || '') || hasModel(t)))
   if (!qs.length) return null
   return (
     <div className="mt-4 space-y-3">
@@ -234,11 +287,17 @@ export function QuestionPractice({ tasks, onAnswer }) {
   )
 }
 
+function hasModel(t) {
+  try { return !!JSON.parse(t.options_json || '{}')['Model answer'] } catch { return false }
+}
+
 function QuestionRow({ task, onAnswer }) {
   const [heard, setHeard] = useState('')
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  let model = null
+  try { model = JSON.parse(task.options_json || '{}')['Model answer'] || null } catch { /* unshaped */ }
   const { SR, live, on, listen } = useSpeechRecognition(async (fin, secs) => {
     setHeard(fin); setRes(null); setErr('')
     if (!onAnswer) return
@@ -258,6 +317,7 @@ function QuestionRow({ task, onAnswer }) {
             </button>
           )}
         </div>
+        {model && <p className="mt-1.5 text-xs text-muted-foreground">Answer: {model}</p>}
         {on && live && <p className="mt-1.5 text-xs text-muted-foreground animate-pulse">&ldquo;{live}&rdquo;</p>}
         {busy && <p className="mt-1.5 text-xs text-muted-foreground">Scoring...</p>}
         {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
@@ -327,8 +387,18 @@ export function GlossaryTable({ rows }) {
           {rows.map(([w, m], i) => (
             <TableRow key={i}>
               <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-              <TableCell className="font-medium whitespace-normal">{w}</TableCell>
-              <TableCell className="text-muted-foreground whitespace-normal">{m}</TableCell>
+              <TableCell className="font-medium whitespace-normal">
+                {w}{' '}
+                <button onClick={() => speakText(w)} aria-label={`Hear ${w}`} className="align-middle text-muted-foreground hover:text-foreground">
+                  <Volume2 className="size-3.5 inline" />
+                </button>
+              </TableCell>
+              <TableCell className="text-muted-foreground whitespace-normal">
+                {m}{' '}
+                <button onClick={() => speakText(m)} aria-label="Hear meaning" className="align-middle hover:text-foreground">
+                  <Volume2 className="size-3.5 inline" />
+                </button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -349,9 +419,20 @@ export function parseStory(text) {
   return out.length >= 2 ? out : []
 }
 
-export function StoryOrder({ bits }) {
+export function StoryOrder({ bits, task, onCheck }) {
   const [order, setOrder] = useState([])
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   if (!bits?.length) return null
+  async function check() {
+    if (!onCheck || !task) return
+    setBusy(true); setErr(''); setRes(null)
+    try { setRes(await onCheck(task, order)) }
+    catch (e) { setErr(e.message || 'Check failed') }
+    finally { setBusy(false) }
+  }
+  const expected = res && res.expected && res.expected.order ? res.expected.order.join(' → ') : ''
   return (
     <div className="mt-4 space-y-3">
       <div className="grid gap-2">
@@ -385,6 +466,17 @@ export function StoryOrder({ bits }) {
             )}
           </div>
           <p className="mt-2 text-xs text-muted-foreground">Tap a picked sentence again to unpick. Say your answer aloud.</p>
+          {task && onCheck && (
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="sm" onClick={check} disabled={busy || !order.length}>{busy ? '…' : 'Check'}</Button>
+              {err && <span className="text-xs text-red-600">{err}</span>}
+              {res && (
+                <span className={cn('text-xs font-medium', res.correct ? 'text-green-600' : 'text-amber-600')}>
+                  {res.correct ? 'Correct!' : <>Not quite — answer: <b>{expected}</b></>}
+                </span>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -448,12 +540,109 @@ export function LabeledSections({ text }) {
   )
 }
 
-// ponytail: prompt-only cards — student API strips answer keys (Task.Public) and no check endpoint exists; add POST /tasks/:id/check when grading is wanted.
-export function QuizList({ tasks }) {
+// ponytail: prompt-only cards — student API strips answer keys (Task.Public);
+// POST /tasks/:id/check reveals the key inside an attempt response.
+function hasObjectives(t) {
+  try { return Array.isArray(JSON.parse(t.options_json || '{}').objectives) } catch { return false }
+}
+
+// ponytail: in-memory ticks, formative only — persist per-student picks when
+// goal tracking outgrows one sitting.
+export function ObjectivesChecklist({ tasks }) {
+  const task = (tasks || []).find(hasObjectives)
+  const [done, setDone] = useState({})
+  if (!task) return null
+  let items = []
+  try { items = JSON.parse(task.options_json).objectives || [] } catch { /* unshaped */ }
+  if (!items.length) return null
+  return (
+    <Card className="mt-4">
+      <CardContent className="pt-6 text-sm">
+        <p className="font-medium leading-relaxed">{task.prompt}</p>
+        <div className="mt-3 space-y-2">
+          {items.map((it, i) => (
+            <label key={i} className="flex items-start gap-2 rounded-lg bg-secondary px-3 py-2 cursor-pointer">
+              <input type="checkbox" className="mt-1" checked={!!done[i]}
+                onChange={() => setDone((d) => ({ ...d, [i]: !d[i] }))} />
+              <span className={cn(done[i] && 'line-through text-muted-foreground')}>{it}</span>
+            </label>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Answer-first reveal: attempt required, key comes back inside the response.
+function CheckRow({ task, onCheck }) {
+  const opt = (() => { try { return JSON.parse(task.options_json || '{}') } catch { return {} } })()
+  const isMatch = !!opt.statements
+  const [single, setSingle] = useState('')
+  const [parts, setParts] = useState({})
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function check() {
+    if (!onCheck) return
+    setBusy(true); setErr(''); setRes(null)
+    try {
+      // ponytail: comma means sequence — explicit per-blank inputs when blanks need them.
+      const answer = isMatch ? parts : (single.includes(',') ? single.split(',').map((s) => s.trim()) : single)
+      setRes(await onCheck(task, answer))
+    } catch (e) { setErr(e.message || 'Check failed') } finally { setBusy(false) }
+  }
+
+  const expected = res ? (() => {
+    const e = res.expected || {}
+    if (e.correct) return e.correct
+    if (e.blanks) return e.blanks.join(' / ')
+    if (e.order) return e.order.join(' → ')
+    if (e.answers) return e.answers.join(' / ')
+    return Object.entries(e).map(([k, v]) => `${k}: ${v}`).join(', ')
+  })() : ''
+
+  return (
+    <div className="mt-3">
+      {isMatch ? (
+        <div className="space-y-1.5">
+          {Object.keys(opt.statements).map((k) => (
+            <div key={k} className="flex items-center gap-2">
+              <b className="text-sm w-6">{k}.</b>
+              <input value={parts[k] || ''} onChange={(e) => setParts((p) => ({ ...p, [k]: e.target.value.toUpperCase() }))}
+                placeholder="Letter" maxLength={2}
+                className="w-20 rounded-lg border bg-card px-3 py-1.5 text-sm uppercase text-center font-mono" />
+              {res?.detail && (
+                <span className={cn('text-xs font-medium', res.detail[k] ? 'text-green-600' : 'text-red-600')}>
+                  {res.detail[k] ? 'Correct' : `Expected ${(res.expected || {})[k] || ''}`}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <input value={single} onChange={(e) => setSingle(e.target.value)}
+          placeholder="Type your answer… (comma-separate sequences)"
+          className="w-full rounded-lg border bg-card px-3 py-2 text-sm" />
+      )}
+      <div className="mt-2 flex items-center gap-2">
+        <Button size="sm" onClick={check} disabled={busy}>{busy ? '…' : 'Check'}</Button>
+        {err && <span className="text-xs text-red-600">{err}</span>}
+        {res && (
+          <span className={cn('text-xs font-medium', res.correct ? 'text-green-600' : 'text-amber-600')}>
+            {res.correct ? 'Correct!' : <>Not quite — answer: <b>{expected}</b></>}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function QuizList({ tasks, onCheck }) {
   if (!tasks?.length) return null
   return (
     <div className="mt-4 space-y-3">
-      {tasks.filter((t) => t.type !== 'SPEAKING_RECORDING' && !hasSentences(t)).map((t, i) => {
+      {tasks.filter((t) => t.type !== 'SPEAKING_RECORDING' && !hasSentences(t) && !hasObjectives(t)).map((t, i) => {
         const opt = safeParse(t.options_json)
         return (
           <Card key={t.id} className="py-4">
@@ -492,6 +681,7 @@ export function QuizList({ tasks }) {
                 </ul>
               )}
               <p className="mt-2 text-xs text-muted-foreground">Say your answer aloud.</p>
+              {onCheck && <CheckRow task={t} onCheck={onCheck} />}
             </CardContent>
           </Card>
         )
