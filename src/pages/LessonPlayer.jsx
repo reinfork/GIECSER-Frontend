@@ -5,6 +5,7 @@ import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
+import { SectionGate } from '@/components/feedback'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -261,7 +262,12 @@ export default function LessonPlayer() {
             ) : isBareList ? (
               <VocabTable words={body.trim().split(/[\s,]+/).filter(Boolean)} />
             ) : !speakTask && module.type !== 'QUIZ' ? (
-              <GoalBlock content={module.content_text} transcript={module.target_transcript} />
+              <>
+                <GoalBlock content={module.content_text} transcript={module.target_transcript} />
+                {/ASR Feedback/i.test(module.title || '') && chapterId && (
+                  <SectionGate chapterId={chapterId} gateModuleId={module.id} />
+                )}
+              </>
             ) : module.type !== 'QUIZ' ? (
               <Card className="mt-4">
                 <CardContent className="pt-6 text-center">
