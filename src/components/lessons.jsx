@@ -148,7 +148,7 @@ export function ListenButton({ text }) {
 export function CellListen({ text, label }) {
   if (!String(text || '').trim()) return null
   return (
-    <button onClick={() => speakText(text)} title={label || 'Listen'} aria-label={label || 'Listen'} className={`ml-1 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary align-middle text-primary-foreground shadow-md ${pressable}`}>
+    <button onClick={() => speakText(text)} title={label || 'Listen'} aria-label={label || 'Listen'} className={`mr-1 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary align-middle text-primary-foreground shadow-md ${pressable}`}>
       <Volume2 className="size-4" />
     </button>
   )
@@ -432,6 +432,12 @@ export function WordsToFix({ reference, transcribed, words }) {
 // shortcut: meaning-column TTS suppressed only when the module declares
 // Indonesian glosses ("Indonesian" in content_text — today just Boat Parts);
 // an explicit per-module lang flag replaces the sniff when content grows.
+// Trailing (parentheticals) are ID translations corpus-wide (Expressions),
+// so TTS skips them; display keeps the full text.
+function degloss(s) {
+  return String(s || '').replace(/\s*\([^)]*\)/g, '').trim()
+}
+
 export function GlossaryTable({ rows, speakMeaning = true }) {
   if (!rows?.length) return null
   return (
@@ -449,12 +455,12 @@ export function GlossaryTable({ rows, speakMeaning = true }) {
             <TableRow key={i}>
               <TableCell className="text-muted-foreground">{i + 1}</TableCell>
               <TableCell className="font-medium whitespace-normal">
-                {w}
                 <CellListen text={w} label={`Hear ${w}`} />
+                {w}
               </TableCell>
               <TableCell className="text-muted-foreground whitespace-normal">
+                {speakMeaning && degloss(m) && <CellListen text={degloss(m)} label="Hear meaning" />}
                 {m}
-                {speakMeaning && <CellListen text={m} label="Hear meaning" />}
               </TableCell>
             </TableRow>
           ))}

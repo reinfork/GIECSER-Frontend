@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -47,6 +48,20 @@ export function SectionGate({ chapterId, gateModuleId }) {
     } catch (e) { setError(e.message) } finally { setBusy(false) }
   }
   const n = gate?.scope.length || 0
+  // Missed practice: distinct modules holding unrecorded tasks, no scores —
+  // pure redirects so students find what they skipped.
+  const missed = (() => {
+    if (!gate) return []
+    const done = new Set((gate.rows || []).map((r) => r.task_id))
+    const byModule = new Map()
+    for (const t of gate.scope || []) {
+      if (done.has(t.task_id)) continue
+      const m = byModule.get(t.module_id) || { module_id: t.module_id, module_title: t.module_title, left: 0 }
+      m.left += 1
+      byModule.set(t.module_id, m)
+    }
+    return [...byModule.values()]
+  })()
   return (
     <Card className="mt-4">
       <CardHeader>
@@ -67,6 +82,22 @@ export function SectionGate({ chapterId, gateModuleId }) {
             <Button onClick={generate} disabled={busy || gate.attempted === 0} className="rounded-full">
               {busy ? 'Generating...' : verdict ? 'Regenerate section feedback' : 'Generate section feedback'}
             </Button>
+          )}
+          {missed.length > 0 && (
+            <div className="space-y-2 border-t pt-3">
+              <div className="font-semibold">Missed practice</div>
+              {missed.map((m) => (
+                <div key={m.module_id} className="flex items-center justify-between gap-3">
+                  <span className="truncate">{m.module_title}</span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <Badge variant="secondary">{m.left} left</Badge>
+                    <Button size="sm" asChild>
+                      <Link to={`/modules/${m.module_id}`}>Practice</Link>
+                    </Button>
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
           {verdict && (
             <div className="space-y-2 border-t pt-3">
