@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable } from '@/components/lessons'
+import { DialogueScript, FunctionCards, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable, passageCls } from '@/components/lessons'
 import { SectionGate } from '@/components/feedback'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -199,13 +199,16 @@ export default function LessonPlayer() {
   // Function/Grammar share one type); a real `subtype` column ends it.
   const body = module?.target_transcript || ''
   const isFunc = /function|grammar/i.test(module?.title || '')
-  const pairRows = !isFunc ? parsePairs(body) : []
-  let tableRows = !isFunc && !pairRows.length ? parseTable(body) : []
+  // Table-shaped transcripts (=> pairs) win over the section prose renderer
+  // so glossaries with "Function" in the title still tabulate.
+  const pairRows = parsePairs(body)
+  let tableRows = !pairRows.length ? parseTable(body) : []
   // ponytail: glossary modules keep pairs in content_text (transcript empty) —
   // content fallback is table-only so guiding-question prose never collapses.
-  if (!isFunc && !body.trim() && !tableRows.length) tableRows = parseTable(module?.content_text || '')
+  if (!body.trim() && !tableRows.length) tableRows = parseTable(module?.content_text || '')
+  const funcHeads = /functions reference/i.test(module?.title || '') ? ['No', 'Language Function', 'Example'] : undefined
   const storyBits = tasks.some((t) => { try { return !!JSON.parse(t.options_json || '{}').sentences } catch { return false } }) ? parseStory(body) : []
-  const isBareList = !isFunc && body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
+  const isBareList = body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
   // Table-name lists ("from Table 2.1") are display-first: no mic by supervisor call.
   const isTableList = !!isBareList && /from Table/i.test(module?.content_text || '')
 
@@ -242,23 +245,16 @@ export default function LessonPlayer() {
                   <p className="text-muted-foreground text-sm">{module.content_text}</p>
                   <DialogueScript text={module.target_transcript} />
                   {speakTask && canRecord && <RolePlay text={module.target_transcript} />}
-                  {speakTask && canRecord && (
-                    <div className="text-center">
-                      <Button size="lg" onClick={toggleRecording} disabled={submitting} className="mt-6 rounded-full">
-                        {recording ? <><Square className="size-4" /> Stop & assess</> : <><Mic className="size-4" /> {submitting ? 'Scoring...' : 'Record speaking'}</>}
-                      </Button>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
-            ) : isFunc ? (
-              <LabeledSections text={body || module.content_text} />
             ) : storyBits.length ? (
               <StoryOrder bits={storyBits} task={tasks.find((t) => { try { return !!JSON.parse(t.options_json || '{}').sentences } catch { return false } })} onCheck={checkAnswer} />
             ) : pairRows.length ? (
               <VocabTable pairs={pairRows} />
             ) : tableRows.length ? (
-              <GlossaryTable rows={tableRows} speakMeaning={!/indonesian/i.test(module?.content_text || '')} />
+              funcHeads ? <FunctionCards rows={tableRows} /> : <GlossaryTable rows={tableRows} speakMeaning={!/indonesian/i.test(module?.content_text || '')} heads={funcHeads} />
+            ) : isFunc ? (
+              <LabeledSections text={body || module.content_text} />
             ) : isBareList ? (
               <VocabTable words={body.trim().split(/[\s,]+/).filter(Boolean)} />
             ) : !speakTask && module.type !== 'QUIZ' ? (
@@ -275,7 +271,7 @@ export default function LessonPlayer() {
                     <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
                     <ListenButton text={module.target_transcript || module.content_text} />
                   </div>
-                  <p className="text-lg leading-relaxed whitespace-pre-wrap mt-2">{module.target_transcript || module.content_text}</p>
+                  <p className={`text-lg whitespace-pre-wrap mt-2 ${passageCls}`}>{module.target_transcript || module.content_text}</p>
                   {speakTask && canRecord && (
                   <Button size="lg" onClick={toggleRecording} disabled={submitting} className="mt-6 rounded-full">
                     {recording ? <><Square className="size-4" /> Stop & assess</> : <><Mic className="size-4" /> {submitting ? 'Scoring...' : 'Record speaking'}</>}
@@ -315,7 +311,7 @@ export default function LessonPlayer() {
 
             <QuestionPractice tasks={tasks} onAnswer={answerQuestion} />
 
-            <RepeatPractice tasks={tasks} onAnswer={answerQuestion} active={!canRecord} />
+            <RepeatPractice tasks={tasks} onAnswer={answerQuestion} active={!canRecord || module?.type === 'DIALOGUE' || tableRows.length > 0} />
 
             {(module.type === 'DIALOGUE' || module.type === 'VIDEO' || pairRows.length > 0 || isBareList) && error && <p className="text-sm text-red-600 mt-3 text-center">{error}</p>}
 
@@ -388,6 +384,7 @@ export default function LessonPlayer() {
               )}
             </div>
 
+            {(module.target_transcript || '').trim() && (
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle>Overview</CardTitle>
@@ -408,6 +405,7 @@ export default function LessonPlayer() {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
 
           <Card className="py-0 overflow-hidden lg:sticky lg:top-6">

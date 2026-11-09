@@ -6,17 +6,21 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
+// One passage treatment for all reading prose: justified, plain weight,
+// relaxed leading. Dialogue bubbles stay left-aligned (chat convention).
+export const passageCls = 'text-justify font-normal leading-relaxed'
+
 // Plain statement card for goal/reference modules (no speaking task attached).
 // YAGNI: no progress, no checklist — the seed stores goals as plain text.
 export function GoalBlock({ content, transcript }) {
   const say = transcript && transcript !== content ? `${content}. ${transcript}` : (transcript || content)
   return (
     <Card className="mt-4">
-      <CardContent className="pt-6 text-sm leading-relaxed whitespace-pre-wrap">
+      <CardContent className={`pt-6 text-sm whitespace-pre-wrap ${passageCls}`}>
         <div className="mb-3"><ListenButton text={say} /></div>
         {content}
         {transcript && transcript !== content && (
-          <p className="mt-3 font-medium">{transcript}</p>
+          <p className="mt-3">{transcript}</p>
         )}
       </CardContent>
     </Card>
@@ -40,7 +44,7 @@ function parseTurns(text) {
 }
 export function DialogueScript({ text }) {
   const turns = parseTurns(text)
-  if (!turns.length) return <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
+  if (!turns.length) return <p className={`text-sm whitespace-pre-wrap ${passageCls}`}>{text}</p>
   const speakers = [...new Set(turns.filter((t) => t.speaker).map((t) => t.speaker))]
   return (
     <div className="mt-4 space-y-2">
@@ -389,6 +393,71 @@ function RepeatRow({ task, onAnswer }) {
   )
 }
 
+// Formative function cards: practice each example aloud, transcription-only.
+// No tasks, no rows, no gate impact — the scored record lives on Instruction.
+export function ExampleCards({ rows }) {
+  if (!rows?.length) return null
+  return (
+    <div className="mt-4 space-y-3">
+      {rows.map(([func, ex], i) => <ExampleCard key={i} func={func} example={ex} />)}
+    </div>
+  )
+}
+
+function ExampleCard({ func, example }) {
+  const [heard, setHeard] = useState('')
+  const { SR, live, on, listen } = useSpeechRecognition((fin) => setHeard(fin))
+  const norm = (s) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
+  const ok = heard && (norm(heard).includes(norm(example)) || norm(example).includes(norm(heard)))
+  return (
+    <Card className="py-4">
+      <CardContent className="text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium leading-relaxed">{func}</p>
+          {SR && <MicButton onClick={listen} on={on} label={`Say: ${example}`} />}
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">Example: {example}</p>
+        {on && live && <p className="mt-1.5 text-xs text-muted-foreground animate-pulse">&ldquo;{live}&rdquo;</p>}
+        {heard && (
+          <p className={cn('mt-1.5 text-xs', ok ? 'text-green-600' : 'text-amber-600')}>
+            {ok ? <><Check className="size-3.5 inline" /> Correct — </> : 'Try again — '}&ldquo;{heard}&rdquo;
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Function practice cards: one per language-function pair — name + a
+// formative mic (transcription only, like VocabRow) + the example shown
+// outright. Nothing here scores; the course gate counts the monologue only.
+export function FunctionCards({ rows }) {
+  if (!rows?.length) return null
+  return (
+    <div className="mt-4 space-y-3">
+      {rows.map(([fn, ex], i) => <FunctionCard key={i} fn={fn} ex={ex} />)}
+    </div>
+  )
+}
+
+function FunctionCard({ fn, ex }) {
+  const [heard, setHeard] = useState('')
+  const { SR, live, on, listen } = useSpeechRecognition((fin) => setHeard(fin))
+  return (
+    <Card className="py-4">
+      <CardContent className="text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-medium leading-relaxed">{fn}</p>
+          {SR && <MicButton onClick={listen} on={on} label={`Say your ${fn} sentence`} />}
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">Example: {ex}</p>
+        {on && live && <p className="mt-1.5 text-xs text-muted-foreground animate-pulse">&ldquo;{live}&rdquo;</p>}
+        {heard && <p className="mt-1.5 text-xs text-muted-foreground">You said: &ldquo;{heard}&rdquo;</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ponytail: mirrors scoring.Words + WER backtrack priority so chips agree with
 // the server accuracy; converges if the backend ever returns the alignment.
 export function mispronounced(reference, transcribed) {
@@ -577,13 +646,13 @@ export function parsePairs(text) {
 // ponytail: colon-heading heuristic — misfires if a seed sentence ever starts
 // "Like this:" mid-prose; a real `subtype` column ends the sniffing.
 export function LabeledSections({ text }) {
-  const parts = String(text || '').split(/\s*(?=[A-Z][^.:;]{2,50}:\s)/g).filter((s) => s.trim())
+  const parts = String(text || '').split(/\s*(?=[A-Z][^.:;?!]{2,50}:\s)/g).filter((s) => s.trim())
   if (!parts.length) return null
   return (
     <div className="mt-4 space-y-3">
       {parts.map((p, i) => {
-        const m = p.match(/^([^.:;]{2,50}):\s*([\s\S]*)$/)
-        if (!m) return <p key={i} className="text-sm text-muted-foreground leading-relaxed">{p.trim()}</p>
+        const m = p.match(/^([^.:;?!]{2,50}):\s*([\s\S]*)$/)
+        if (!m) return <p key={i} className={`text-sm text-muted-foreground ${passageCls}`}>{p.trim()}</p>
         const sents = m[2].split(/(?<=[.?!])\s+/).map((s) => s.trim()).filter(Boolean)
         return (
           <Card key={i} className="py-4">
@@ -593,7 +662,7 @@ export function LabeledSections({ text }) {
                 <ListenButton text={sents.join(' ')} />
               </div>
               <ul className="mt-1.5 list-disc list-inside space-y-1 text-muted-foreground">
-                {sents.map((s, j) => <li key={j} className="leading-relaxed">{s}</li>)}
+                {sents.map((s, j) => <li key={j} className={passageCls}>{s}</li>)}
               </ul>
             </CardContent>
           </Card>
@@ -637,10 +706,21 @@ export function ObjectivesChecklist({ tasks }) {
 }
 
 // Answer-first reveal: attempt required, key comes back inside the response.
+// blank (N)____ markers are the fill-in syntax (Galah, Sarah&Dave). The count
+// comes from the prompt itself: keys never reach the student API, so markers
+// are assumed contiguous from 1.
+function blankSlots(prompt) {
+  const ns = [...String(prompt || '').matchAll(/\((\d+)\)\s*_{2,}/g)].map((m) => +m[1])
+  if (!ns.length) return []
+  return Array.from({ length: Math.max(...ns) }, (_, i) => i)
+}
+
 function CheckRow({ task, onCheck }) {
   const opt = (() => { try { return JSON.parse(task.options_json || '{}') } catch { return {} } })()
   const isMatch = !!opt.statements
+  const slots = !isMatch ? blankSlots(task.prompt) : []
   const [single, setSingle] = useState('')
+  const [vals, setVals] = useState(() => slots.map(() => ''))
   const [parts, setParts] = useState({})
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -651,7 +731,7 @@ function CheckRow({ task, onCheck }) {
     setBusy(true); setErr(''); setRes(null)
     try {
       // ponytail: comma means sequence — explicit per-blank inputs when blanks need them.
-      const answer = isMatch ? parts : (single.includes(',') ? single.split(',').map((s) => s.trim()) : single)
+      const answer = isMatch ? parts : slots.length ? vals : (single.includes(',') ? single.split(',').map((s) => s.trim()) : single)
       setRes(await onCheck(task, answer))
     } catch (e) { setErr(e.message || 'Check failed') } finally { setBusy(false) }
   }
@@ -680,6 +760,32 @@ function CheckRow({ task, onCheck }) {
                   {res.detail[k] ? 'Correct' : `Expected ${(res.expected || {})[k] || ''}`}
                 </span>
               )}
+            </div>
+          ))}
+        </div>
+      ) : slots.length ? (
+        <div className="space-y-2">
+          {String(task.prompt || '').split(/(?<=[.?!])\s+/).filter((s) => s.trim()).map((line, li) => (
+            <div key={li} className="rounded-lg border bg-card px-3 py-2 text-sm leading-relaxed">
+              {line.split(/(\(\d+\)\s*_{2,})/g).map((bit, bi) => {
+                const m = bit.match(/^\((\d+)\)\s*_{2,}$/)
+                if (!m) return <span key={bi}>{bit}</span>
+                const idx = +m[1] - 1
+                const ok = res?.detail?.[String(idx)]
+                const want = (res?.expected?.blanks || [])[idx]
+                return (
+                  <span key={bi} className="inline-flex items-center gap-1.5 mx-1 align-middle">
+                    <input value={vals[idx] || ''} onChange={(e) => setVals((v) => v.map((x, j) => (j === idx ? e.target.value : x)))}
+                      placeholder={`(${m[1]})`} aria-label={`Answer ${m[1]}`}
+                      className="w-24 rounded-lg border bg-card px-2 py-1 text-sm text-center" />
+                    {res && (
+                      <span className={cn('text-xs font-medium', ok ? 'text-green-600' : 'text-red-600')}>
+                        {ok ? '✓' : want ? `→ ${want}` : '✗'}
+                      </span>
+                    )}
+                  </span>
+                )
+              })}
             </div>
           ))}
         </div>
@@ -715,7 +821,7 @@ export function QuizList({ tasks, onCheck }) {
                 <span className="text-muted-foreground">Q{i + 1}</span>
                 <span className="ml-auto"><ListenButton text={t.prompt} /></span>
               </div>
-              <p className="mt-2 leading-relaxed whitespace-pre-wrap">{t.prompt}</p>
+              {!blankSlots(t.prompt).length && <p className="mt-2 leading-relaxed whitespace-pre-wrap">{t.prompt}</p>}
               {opt && !opt.statements && !opt.bank && !opt.sentences && (
                 <ul className="mt-2 space-y-1">
                   {Object.entries(opt).map(([k, v]) => (
