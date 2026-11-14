@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, FunctionCards, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable, passageCls } from '@/components/lessons'
+import { DialogueScript, FunctionCards, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, DraftBox, DraftReference, isDraftTask, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable, passageCls } from '@/components/lessons'
 import { SectionGate } from '@/components/feedback'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -207,6 +207,10 @@ export default function LessonPlayer() {
   // content fallback is table-only so guiding-question prose never collapses.
   if (!body.trim() && !tableRows.length) tableRows = parseTable(module?.content_text || '')
   const funcHeads = /functions reference/i.test(module?.title || '') ? ['No', 'Language Function', 'Example'] : undefined
+  // ponytail: numbered blanks ((1) ___) mean fill-in dialogue — role-play
+  // reads poorly over gaps, so Sarah-and-Dave style modules stay TTS-only.
+  // A real `practice_mode` on the module ends the sniffing.
+  const hasGaps = /\(\d+\)\s*_{3,}/.test(module?.target_transcript || '')
   const storyBits = tasks.some((t) => { try { return !!JSON.parse(t.options_json || '{}').sentences } catch { return false } }) ? parseStory(body) : []
   const isBareList = body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
   // Table-name lists ("from Table 2.1") are display-first: no mic by supervisor call.
@@ -244,7 +248,7 @@ export default function LessonPlayer() {
                 <CardContent className="pt-6">
                   <p className="text-muted-foreground text-sm">{module.content_text}</p>
                   <DialogueScript text={module.target_transcript} />
-                  {speakTask && canRecord && <RolePlay text={module.target_transcript} />}
+                  {!hasGaps && <RolePlay text={module.target_transcript} />}
                 </CardContent>
               </Card>
             ) : storyBits.length ? (
@@ -267,6 +271,9 @@ export default function LessonPlayer() {
             ) : module.type !== 'QUIZ' ? (
               <Card className="mt-4">
                 <CardContent className="pt-6 text-center">
+                  {module.content_text && module.content_text !== module.target_transcript && (
+                    <p className="text-muted-foreground text-sm text-left mb-3">{module.content_text}</p>
+                  )}
                   <div className="flex items-center justify-center gap-3">
                     <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
                     <ListenButton text={module.target_transcript || module.content_text} />
@@ -294,6 +301,8 @@ export default function LessonPlayer() {
               </Card>
             )}
 
+            {module.type === 'ORAL_TEST' && <DraftReference courseId={module.course_id} />}
+
             {module.audio_model_url && (
               <audio controls preload="none" src={module.audio_model_url} className="mt-4 w-full" />
             )}
@@ -306,6 +315,8 @@ export default function LessonPlayer() {
             )}
 
             <QuizList tasks={tasks} onCheck={checkAnswer} />
+
+            {tasks.some(isDraftTask) && <DraftBox courseId={module.course_id} />}
 
             <ObjectivesChecklist tasks={tasks} />
 

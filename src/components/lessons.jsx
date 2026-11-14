@@ -807,11 +807,57 @@ function CheckRow({ task, onCheck }) {
   )
 }
 
+// ponytail: localStorage scratch (same as reflection) — no backend: the
+// draft is an unscored speaking reference. Keyed by course so Create and
+// Record share it. Single-device only; a drafts table ends that.
+export function isDraftTask(t) {
+  try { return !!JSON.parse(t.options_json || '{}').draft } catch { return false }
+}
+
+function draftKey(courseId) {
+  return `asri_monologue_${courseId || 'misc'}`
+}
+
+export function DraftBox({ courseId }) {
+  const [text, setText] = useState(() => {
+    try { return localStorage.getItem(draftKey(courseId)) || '' } catch { return '' }
+  })
+  function save(v) {
+    setText(v)
+    try { localStorage.setItem(draftKey(courseId), v) } catch { /* best-effort */ }
+  }
+  return (
+    <Card className="mt-4">
+      <CardContent className="pt-6 text-sm">
+        <textarea value={text} onChange={(e) => save(e.target.value.slice(0, 2000))} rows={8}
+          placeholder="Type your monologue here…"
+          className="w-full rounded-lg border bg-card px-3 py-2 text-sm leading-relaxed" />
+        <p className="mt-1.5 text-xs text-muted-foreground">{text.length}/2000 · saved on this device · not scored</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function DraftReference({ courseId }) {
+  const [text] = useState(() => {
+    try { return localStorage.getItem(draftKey(courseId)) || '' } catch { return '' }
+  })
+  if (!text.trim()) return <p className="mt-4 text-sm text-muted-foreground">No draft yet — write one in Create My Monologue first.</p>
+  return (
+    <Card className="mt-4">
+      <CardContent className="pt-6 text-sm">
+        <div className="font-semibold mb-1">Your monologue</div>
+        <p className="leading-relaxed whitespace-pre-wrap text-muted-foreground">{text}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function QuizList({ tasks, onCheck }) {
   if (!tasks?.length) return null
   return (
     <div className="mt-4 space-y-3">
-      {tasks.filter((t) => t.type !== 'SPEAKING_RECORDING' && !hasSentences(t) && !hasObjectives(t)).map((t, i) => {
+      {tasks.filter((t) => t.type !== 'SPEAKING_RECORDING' && !hasSentences(t) && !hasObjectives(t) && !isDraftTask(t)).map((t, i) => {
         const opt = safeParse(t.options_json)
         return (
           <Card key={t.id} className="py-4">
