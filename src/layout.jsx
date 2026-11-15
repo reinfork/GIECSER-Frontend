@@ -31,7 +31,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 bg-card border-r hidden md:flex flex-col">
+      <aside className="w-64 shrink-0 bg-card border-r hidden md:flex flex-col sticky top-0 h-screen">
         <div className="p-5 flex items-center gap-2 font-bold text-lg">
           <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">G</span>
           GIECSER ASR
@@ -58,7 +58,7 @@ export default function Layout() {
         <div className="p-3">
           <Separator className="mb-3" />
           <div className="px-1 text-sm font-medium truncate">
-            {profile?.kind === 'teacher' ? profile?.email : 'Kelas sesi'}
+            {profile?.kind === 'teacher' ? profile?.email : (profile?.name || 'Kelas sesi')}
           </div>
           <div className="flex gap-2 mt-2">
             <button onClick={onLogout} className="flex-1 flex items-center justify-center gap-2 text-sm bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md px-2 py-1.5">

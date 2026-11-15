@@ -429,13 +429,13 @@ export default function LessonPlayer() {
             )}
           </div>
 
-          <Card className="py-0 overflow-hidden lg:sticky lg:top-6">
-            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <Card className="py-0 overflow-hidden lg:sticky lg:top-6 self-start">
+            <div className="px-4 py-3 flex items-center justify-between bg-primary text-primary-foreground">
               <span className="font-semibold text-sm">Course Content</span>
               <Badge variant="secondary">{siblings.length} modules</Badge>
             </div>
             <Separator />
-            <div className="max-h-[480px] overflow-y-auto py-1">
+            <div className="max-h-[480px] lg:max-h-[calc(100vh-14rem)] overflow-y-auto py-1">
               {siblings.map((m) => {
                 const active = m.id === id
                 return (

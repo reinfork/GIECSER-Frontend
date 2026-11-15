@@ -914,7 +914,7 @@ function CheckRow({ task, onCheck, onCorrect, gapLines }) {
         ))
       : (
         <input value={single} onChange={(e) => setSingle(e.target.value)}
-          placeholder="Type your answer… (comma-separate sequences)"
+          placeholder="Type your answer…"
           className="w-full rounded-lg border bg-card px-3 py-2 text-sm" />
       )}
       <div className="mt-2 flex items-center gap-2">
