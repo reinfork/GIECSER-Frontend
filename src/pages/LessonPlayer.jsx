@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { DialogueScript, FunctionCards, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, DraftBox, DraftReference, isDraftTask, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable, passageCls } from '@/components/lessons'
 import { SectionGate } from '@/components/feedback'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -434,7 +433,6 @@ export default function LessonPlayer() {
               <span className="font-semibold text-sm">Course Content</span>
               <Badge variant="secondary">{siblings.length} modules</Badge>
             </div>
-            <Separator />
             <div className="max-h-[480px] lg:max-h-[calc(100vh-14rem)] overflow-y-auto py-1">
               {siblings.map((m) => {
                 const active = m.id === id
