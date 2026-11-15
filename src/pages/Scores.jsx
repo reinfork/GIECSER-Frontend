@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { authFetch } from '../auth'
+import { TeacherTabs } from './Teacher'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -53,13 +54,21 @@ export default function Scores() {
       </header>
 
       <div className="max-w-4xl mx-auto p-6 space-y-4">
-        <div className="flex gap-2 items-center">
-          <label className="text-sm text-muted-foreground">Kode kelas</label>
-          <select value={code} onChange={(e) => setCode(e.target.value)}
-            className="border rounded px-2 py-1 text-sm bg-card font-mono tracking-[0.2em]">
-            {pins.map((p) => <option key={p.id} value={p.code}>{p.code}</option>)}
-          </select>
-        </div>
+        <TeacherTabs active="nilai" />
+        <div className="grid md:grid-cols-[210px_1fr] gap-4 items-start">
+          <Card>
+            <CardContent className="pt-4 space-y-1.5">
+              <div className="text-sm font-semibold px-1">Kode kelas</div>
+              {pins.length === 0 && !pending && <p className="text-xs text-muted-foreground px-1">Belum ada kode.</p>}
+              {pins.map((p) => (
+                <button key={p.id} onClick={() => setCode(p.code)}
+                  className={cn('block w-full rounded-lg px-3 py-2 text-sm font-mono tracking-[0.2em] text-left transition-colors', code === p.code ? 'bg-primary text-primary-foreground' : 'bg-secondary hover:bg-secondary/70')}>
+                  {p.code}
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+          <div className="space-y-4 min-w-0">
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</div>}
         {pending && <p className="text-sm text-muted-foreground">Memuat…</p>}
         {!pending && rows.length === 0 && !error && (
@@ -93,6 +102,8 @@ export default function Scores() {
             </CardContent>
           </Card>
         ))}
+          </div>
+        </div>
       </div>
     </div>
   )

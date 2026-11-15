@@ -1,12 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { KeyRound, LogOut, Plus, Star } from 'lucide-react'
+import { Check, Copy, KeyRound, LogOut, Plus } from 'lucide-react'
 import { authFetch, getProfile, logout } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+// ponytail: plain links, not nested routes — the two panels stay separate
+// pages; tabs are only the switch. A single tabbed page replaces this when
+// the panels need shared state.
+export function TeacherTabs({ active }) {
+  const tabs = [
+    { key: 'kode', label: 'Kode Kelas', to: '/teacher' },
+    { key: 'nilai', label: 'Nilai', to: '/teacher/scores' },
+  ]
+  return (
+    <div className="flex gap-1 rounded-xl bg-secondary p-1">
+      {tabs.map((t) => (
+        <Link key={t.key} to={t.to} className={cn('flex-1 rounded-lg px-4 py-2 text-sm font-medium text-center transition-colors', active === t.key ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground')}>
+          {t.label}
+        </Link>
+      ))}
+    </div>
+  )
+}
 
 export default function Teacher() {
   const navigate = useNavigate()
@@ -14,6 +34,7 @@ export default function Teacher() {
   const [pins, setPins] = useState([])
   const [pinsPending, setPinsPending] = useState(true)
   const [issuing, setIssuing] = useState(false)
+  const [copied, setCopied] = useState('')
   const [error, setError] = useState('')
 
   async function loadPins() {
@@ -34,6 +55,13 @@ export default function Teacher() {
     } catch (e) { setError(e.message) } finally { setIssuing(false) }
   }
 
+  // ponytail: fire-and-forget clipboard — the code stays visible to copy by
+  // hand when the API is missing (non-secure contexts).
+  async function copy(code) {
+    try { await navigator.clipboard.writeText(code); setCopied(code); setTimeout(() => setCopied(''), 1500) }
+    catch { /* clipboard unavailable — code stays selectable */ }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-card">
@@ -43,9 +71,6 @@ export default function Teacher() {
             Teacher Panel <span className="text-xs font-normal text-muted-foreground">{profile?.email}</span>
           </div>
           <div className="flex gap-2">
-            <Link to="/teacher/scores">
-              <Button variant="outline" size="sm"><Star className="size-4" /> Nilai</Button>
-            </Link>
             <Button variant="outline" size="sm" onClick={() => { logout(); navigate('/') }}>
               <LogOut className="size-4" /> Logout
             </Button>
@@ -53,7 +78,8 @@ export default function Teacher() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-4xl mx-auto p-6 space-y-4">
+        <TeacherTabs active="kode" />
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><KeyRound className="size-5" /> Kode Kelas</CardTitle>
@@ -76,7 +102,15 @@ export default function Teacher() {
                 <TableBody>
                   {pins.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell><Badge variant="secondary" className="font-mono text-base tracking-[0.2em]">{p.code}</Badge></TableCell>
+                      <TableCell>
+                        <span className="flex items-center gap-2">
+                          <Badge variant="secondary" className="font-mono text-base tracking-[0.2em]">{p.code}</Badge>
+                          <button onClick={() => copy(p.code)} aria-label={`Salin kode ${p.code}`} title="Salin kode"
+                            className="rounded-md bg-secondary p-1.5 hover:bg-secondary/70 text-muted-foreground hover:text-foreground">
+                            {copied === p.code ? <Check className="size-4 text-green-600" /> : <Copy className="size-4" />}
+                          </button>
+                        </span>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{new Date(p.expires_at).toLocaleString()}</TableCell>
                     </TableRow>
                   ))}
