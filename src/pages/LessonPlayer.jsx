@@ -31,10 +31,13 @@ export default function LessonPlayer() {
   const [result, setResult] = useState(null)
   const [live, setLive] = useState('')
   const [error, setError] = useState('')
+  // ponytail: per-visit pass memory — relocks on module switch or reload;
+  // persist per-task passes when teachers ask for it.
+  const [passed, setPassed] = useState({})
 
   useEffect(() => {
     setPending(true)
-    setResult(null); setError('')
+    setResult(null); setError(''); setPassed({})
     authFetch(`/modules/${id}`)
       .then(async (m) => {
         setModule(m)
@@ -211,6 +214,15 @@ export default function LessonPlayer() {
   // reads poorly over gaps, so Sarah-and-Dave style modules stay TTS-only.
   // A real `practice_mode` on the module ends the sniffing.
   const hasGaps = /\(\d+\)\s*_{3,}/.test(module?.target_transcript || '')
+  // ponytail: transcript lines carrying blanks feed the inline dropdowns —
+  // CheckRow falls back to the numbered list when a bank task has none.
+  const gapLines = (module?.target_transcript || '').split(/(?<=[.?!])\s+/).filter((s) => /\(\d+\)\s*_{2,}/.test(s))
+  // ponytail: completed script comes only from an earned Check response —
+  // never the seed. Positional fill; relocks when the module changes.
+  const fillGaps = (text, blanks) => String(text || '').replace(/\((\d+)\)\s*_{3,}/g, (_, n) => blanks[Number(n) - 1] ?? '')
+  const blanksTask = tasks.find((t) => { try { return Array.isArray(JSON.parse(t.options_json || '{}').bank) } catch { return false } })
+  const passBlanks = blanksTask && passed[blanksTask.id] && Array.isArray(passed[blanksTask.id].blanks) ? passed[blanksTask.id].blanks : null
+  const completed = passBlanks ? fillGaps(module?.target_transcript || '', passBlanks) : null
   const storyBits = tasks.some((t) => { try { return !!JSON.parse(t.options_json || '{}').sentences } catch { return false } }) ? parseStory(body) : []
   const isBareList = body.trim() && !/[.?!]/.test(body) && !pairRows.length && !tableRows.length
   // Table-name lists ("from Table 2.1") are display-first: no mic by supervisor call.
@@ -249,6 +261,7 @@ export default function LessonPlayer() {
                   <p className="text-muted-foreground text-sm">{module.content_text}</p>
                   <DialogueScript text={module.target_transcript} />
                   {!hasGaps && <RolePlay text={module.target_transcript} />}
+                  {completed && <RolePlay text={completed} />}
                 </CardContent>
               </Card>
             ) : storyBits.length ? (
@@ -314,7 +327,7 @@ export default function LessonPlayer() {
               </p>
             )}
 
-            <QuizList tasks={tasks} onCheck={checkAnswer} />
+            <QuizList tasks={tasks} onCheck={checkAnswer} onCorrect={(t, r) => setPassed((p) => ({ ...p, [t.id]: r.expected }))} gapLines={gapLines} />
 
             {tasks.some(isDraftTask) && <DraftBox courseId={module.course_id} />}
 

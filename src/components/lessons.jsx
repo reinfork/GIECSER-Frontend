@@ -715,12 +715,38 @@ function blankSlots(prompt) {
   return Array.from({ length: Math.max(...ns) }, (_, i) => i)
 }
 
-function CheckRow({ task, onCheck }) {
+// One bank dropdown: picked value, change handler and per-blank verdict
+// shared by the inline-sentence and numbered-list layouts.
+function BlankSelect({ idx, bank, vals, setVals, res }) {
+  const ok = res?.detail?.[String(idx)]
+  const want = (res?.expected?.blanks || [])[idx]
+  return (
+    <span className="inline-flex items-center gap-1.5 mx-1 align-middle">
+      <select value={vals[idx] || ''} onChange={(e) => setVals((v) => v.map((x, j) => (j === idx ? e.target.value : x)))}
+        aria-label={`Answer ${idx + 1}`}
+        className="rounded-lg border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground">
+        <option value="">Choose…</option>
+        {bank.map((w) => <option key={w} value={w}>{w}</option>)}
+      </select>
+      {res && (
+        <span className={cn('text-xs font-medium', ok ? 'text-green-600' : 'text-red-600')}>
+          {ok ? '✓' : want ? `→ ${want}` : '✗'}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function CheckRow({ task, onCheck, onCorrect, gapLines }) {
   const opt = (() => { try { return JSON.parse(task.options_json || '{}') } catch { return {} } })()
   const isMatch = !!opt.statements
   const slots = !isMatch ? blankSlots(task.prompt) : []
+  const bank = !isMatch && Array.isArray(opt.bank) ? opt.bank : null
+  // ponytail: bank length stands in for the blank count (the only bank task
+  // today is 8-and-8) — an explicit options count ends the assumption.
+  const slotCount = slots.length || (bank ? bank.length : 0)
   const [single, setSingle] = useState('')
-  const [vals, setVals] = useState(() => slots.map(() => ''))
+  const [vals, setVals] = useState(() => Array.from({ length: slotCount }, () => ''))
   const [parts, setParts] = useState({})
   const [res, setRes] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -731,8 +757,10 @@ function CheckRow({ task, onCheck }) {
     setBusy(true); setErr(''); setRes(null)
     try {
       // ponytail: comma means sequence — explicit per-blank inputs when blanks need them.
-      const answer = isMatch ? parts : slots.length ? vals : (single.includes(',') ? single.split(',').map((s) => s.trim()) : single)
-      setRes(await onCheck(task, answer))
+      const answer = isMatch ? parts : slotCount ? vals : (single.includes(',') ? single.split(',').map((s) => s.trim()) : single)
+      const r = await onCheck(task, answer)
+      setRes(r)
+      if (r && r.correct && onCorrect) onCorrect(task, r)
     } catch (e) { setErr(e.message || 'Check failed') } finally { setBusy(false) }
   }
 
@@ -763,7 +791,41 @@ function CheckRow({ task, onCheck }) {
             </div>
           ))}
         </div>
-      ) : slots.length ? (
+      ) : slotCount ? (
+        bank ? (
+          gapLines && gapLines.length ? (
+            <div className="space-y-2">
+              {gapLines.map((line, li) => {
+                // ponytail: reads the line with chosen words filled in;
+                // unfilled blanks are skipped, never spoken as "blank".
+                const say = line.replace(/\((\d+)\)\s*_{2,}/g, (_, n) => vals[+n - 1] || '').replace(/\s+/g, ' ')
+                return (
+                <div key={li} className="flex items-baseline gap-2 px-1 py-1.5 text-sm leading-relaxed">
+                  <b className="w-8 shrink-0 text-sm text-muted-foreground">({li + 1})</b>
+                  <span>{line.split(/(\(\d+\)\s*_{2,})/g).map((bit, bi) => {
+                    const m = bit.match(/^\((\d+)\)\s*_{2,}$/)
+                    if (!m) return <span key={bi}>{bit}</span>
+                    const idx = +m[1] - 1
+                    return <BlankSelect key={bi} idx={idx} bank={bank} vals={vals} setVals={setVals} res={res} />
+                  })}</span>
+                  <button onClick={() => speakText(say)} aria-label={`Hear line ${li + 1}`} className="shrink-0 text-muted-foreground hover:text-foreground">
+                    <Volume2 className="size-4" />
+                  </button>
+                </div>
+                )
+              })}
+            </div>
+          ) : (
+          <div className="space-y-1.5">
+            {Array.from({ length: slotCount }, (_, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <b className="text-sm w-10">({idx + 1})</b>
+                <BlankSelect idx={idx} bank={bank} vals={vals} setVals={setVals} res={res} />
+              </div>
+            ))}
+          </div>
+          )
+        ) : (
         <div className="space-y-2">
           {String(task.prompt || '').split(/(?<=[.?!])\s+/).filter((s) => s.trim()).map((line, li) => (
             <div key={li} className="rounded-lg border bg-card px-3 py-2 text-sm leading-relaxed">
@@ -789,15 +851,16 @@ function CheckRow({ task, onCheck }) {
             </div>
           ))}
         </div>
-      ) : (
+        ))
+      : (
         <input value={single} onChange={(e) => setSingle(e.target.value)}
           placeholder="Type your answer… (comma-separate sequences)"
           className="w-full rounded-lg border bg-card px-3 py-2 text-sm" />
       )}
       <div className="mt-2 flex items-center gap-2">
-        <Button size="sm" onClick={check} disabled={busy}>{busy ? '…' : 'Check'}</Button>
+        <Button size="sm" onClick={check} disabled={busy || (bank ? vals.some((v) => !v) : false)}>{busy ? '…' : 'Check'}</Button>
         {err && <span className="text-xs text-red-600">{err}</span>}
-        {res && (
+        {res && (!bank || res.correct) && (
           <span className={cn('text-xs font-medium', res.correct ? 'text-green-600' : 'text-amber-600')}>
             {res.correct ? 'Correct!' : <>Not quite — answer: <b>{expected}</b></>}
           </span>
@@ -853,7 +916,7 @@ export function DraftReference({ courseId }) {
   )
 }
 
-export function QuizList({ tasks, onCheck }) {
+export function QuizList({ tasks, onCheck, onCorrect, gapLines }) {
   if (!tasks?.length) return null
   return (
     <div className="mt-4 space-y-3">
@@ -896,7 +959,7 @@ export function QuizList({ tasks, onCheck }) {
                 </ul>
               )}
               <p className="mt-2 text-xs text-muted-foreground">Say your answer aloud.</p>
-              {onCheck && <CheckRow task={t} onCheck={onCheck} />}
+              {onCheck && <CheckRow task={t} onCheck={onCheck} onCorrect={onCorrect} gapLines={gapLines} />}
             </CardContent>
           </Card>
         )
