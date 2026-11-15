@@ -223,9 +223,9 @@ function useSpeechRecognition(onFinal) {
 }
 
 // ponytail: transcription-only by supervisor call, no scoring path.
-export function VocabRow({ word, example }) {
+export function VocabRow({ word, example, onHeard }) {
   const [heard, setHeard] = useState('')
-  const { SR, live, on, listen } = useSpeechRecognition((fin) => setHeard(fin))
+  const { SR, live, on, listen } = useSpeechRecognition((fin, secs) => { setHeard(fin); if (onHeard) onHeard(fin, secs) })
   // ponytail: local string-match verdict — real phoneme scoring stays in the
   // Groq module pipeline; per-word backend check replaces this when it exists.
   const norm = (s) => s.toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -255,22 +255,40 @@ export function VocabRow({ word, example }) {
   )
 }
 
-// ponytail: formative per-role practice — transcription verdicts only, no
-// scoring path or chapter aggregate; a scored per-role check replaces this
-// when the brief asks for it.
-export function RolePlay({ text }) {
+// ponytail: per-role submit sends the heard lines as one attempt against the
+// role task (matched by its role marker) — either role alone earns feedback,
+// both is never required. Heard text is in-memory; refresh clears it.
+export function RolePlay({ text, speakTasks, onAnswer }) {
   const turns = parseTurns(text)
   const speakers = [...new Set(turns.filter((t) => t.speaker).map((t) => t.speaker))]
   const [role, setRole] = useState(speakers[0] || null)
+  const [heard, setHeard] = useState({})
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   if (!speakers.length) return null
   const active = role || speakers[0]
   const lines = turns.filter((t) => t.speaker === active)
+  const task = (speakTasks || []).find((t) => { try { return JSON.parse(t.options_json || '{}').role === active } catch { return false } })
+  let model = null
+  try { model = JSON.parse(task?.options_json || '{}')['Model answer'] || null } catch { /* unshaped */ }
+  function pick(s) { setRole(s); setHeard({}); setRes(null); setErr('') }
+  const said = lines.map((_, i) => heard[active + ':' + i]).filter((h) => h && h.text)
+  async function submitRole() {
+    if (!onAnswer || !task || !said.length) return
+    setBusy(true); setErr(''); setRes(null)
+    try {
+      const joined = said.map((h) => h.text).join(' ')
+      const secs = said.reduce((a, h) => a + (h.secs || 0), 0)
+      setRes({ ...(await onAnswer(task, joined, secs)), model, joined })
+    } catch (e) { setErr(e.message || 'Assessment failed, try again') } finally { setBusy(false) }
+  }
   return (
     <Card className="mt-4 py-0 overflow-hidden">
       <div className="px-4 pt-4 flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">Practice one role</span>
         {speakers.map((s) => (
-          <Button key={s} size="sm" variant={active === s ? 'default' : 'secondary'} onClick={() => setRole(s)} className="rounded-full">
+          <Button key={s} size="sm" variant={active === s ? 'default' : 'secondary'} onClick={() => pick(s)} className="rounded-full">
             {s}
           </Button>
         ))}
@@ -284,9 +302,25 @@ export function RolePlay({ text }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {lines.map((t, i) => <VocabRow key={i} word={t.line} example={null} />)}
+          {lines.map((t, i) => <VocabRow key={active + ':' + i} word={t.line} example={null} onHeard={(fin, secs) => setHeard((h) => ({ ...h, [active + ':' + i]: { text: fin, secs } }))} />)}
         </TableBody>
       </Table>
+      {task && onAnswer && (
+        <div className="px-4 pb-4 text-sm">
+          <Button size="sm" onClick={submitRole} disabled={busy || !said.length} className="rounded-full">
+            {busy ? 'Scoring…' : `Check my ${active} (${said.length}/${lines.length})`}
+          </Button>
+          {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
+          {res && (
+            <div className="mt-2 space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                <b className="text-foreground">{Math.round(res.accuracy ?? res.fluency)}% accuracy</b> · {(res.accuracy ?? 0) >= 80 ? <span className="text-green-600 font-medium">Correct!</span> : <span className="text-amber-600 font-medium">Try again</span>}
+              </p>
+              {res.model && <WordsToFix reference={res.model} transcribed={res.joined} words={res.mispronounced} />}
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   )
 }
@@ -295,7 +329,7 @@ export function RolePlay({ text }) {
 // aggregate). A visible Model answer shows outright; accuracy lights up
 // when keys seed.
 export function QuestionPractice({ tasks, onAnswer }) {
-  const qs = (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && (/\?\s*$/.test(t.prompt || '') || hasModel(t)))
+  const qs = (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && !hasRole(t) && (/\?\s*$/.test(t.prompt || '') || hasModel(t)))
   if (!qs.length) return null
   return (
     <div className="mt-4 space-y-3">
@@ -306,6 +340,12 @@ export function QuestionPractice({ tasks, onAnswer }) {
 
 function hasModel(t) {
   try { return !!JSON.parse(t.options_json || '{}')['Model answer'] } catch { return false }
+}
+
+// ponytail: role-marked tasks belong to RolePlay submit only — question and
+// repeat rows must not render a second recorder for them.
+function hasRole(t) {
+  try { return !!JSON.parse(t.options_json || '{}').role } catch { return false }
 }
 
 function QuestionRow({ task, onAnswer }) {
@@ -350,7 +390,7 @@ function QuestionRow({ task, onAnswer }) {
 // as question rows; the module mic covers them where canRecord is true.
 export function RepeatPractice({ tasks, onAnswer, active }) {
   const reps = active
-    ? (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || '') && !hasModel(t))
+    ? (tasks || []).filter((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || '') && !hasModel(t) && !hasRole(t))
     : []
   if (!reps.length) return null
   return (
@@ -737,9 +777,16 @@ function BlankSelect({ idx, bank, vals, setVals, res }) {
   )
 }
 
+// ponytail: plain A/B/C/D options mean multiple-choice — the only task
+// shape using letter keys; an explicit `choices` marker ends the sniffing.
+function mcqOptions(opt) {
+  return !!opt && typeof opt.A === 'string' && !opt.statements && !opt.bank && !opt.sentences && !opt.draft && !opt.objectives
+}
+
 function CheckRow({ task, onCheck, onCorrect, gapLines }) {
   const opt = (() => { try { return JSON.parse(task.options_json || '{}') } catch { return {} } })()
   const isMatch = !!opt.statements
+  const isMCQ = mcqOptions(opt)
   const slots = !isMatch ? blankSlots(task.prompt) : []
   const bank = !isMatch && Array.isArray(opt.bank) ? opt.bank : null
   // ponytail: bank length stands in for the blank count (the only bank task
@@ -775,7 +822,20 @@ function CheckRow({ task, onCheck, onCorrect, gapLines }) {
 
   return (
     <div className="mt-3">
-      {isMatch ? (
+      {isMCQ ? (
+        <div className="mt-2 space-y-1">
+          {Object.entries(opt).map(([k, v]) => {
+            const picked = single === k
+            const revealed = res?.expected?.correct
+            return (
+              <button key={k} onClick={() => { setSingle(k); setRes(null) }}
+                className={cn('w-full text-left rounded-lg px-3 py-1.5 text-sm', picked ? 'bg-primary text-primary-foreground' : 'bg-secondary', res && revealed === k && 'ring-2 ring-green-600', res && picked && !res.correct && 'ring-2 ring-red-600')}>
+                <b>{k}.</b> {String(v)}
+              </button>
+            )
+          })}
+        </div>
+      ) : isMatch ? (
         <div className="space-y-1.5">
           {Object.keys(opt.statements).map((k) => (
             <div key={k} className="flex items-center gap-2">
@@ -931,7 +991,7 @@ export function QuizList({ tasks, onCheck, onCorrect, gapLines }) {
                 <span className="ml-auto"><ListenButton text={t.prompt} /></span>
               </div>
               {!blankSlots(t.prompt).length && <p className="mt-2 leading-relaxed whitespace-pre-wrap">{t.prompt}</p>}
-              {opt && !opt.statements && !opt.bank && !opt.sentences && (
+              {opt && !opt.statements && !opt.bank && !opt.sentences && !mcqOptions(opt) && (
                 <ul className="mt-2 space-y-1">
                   {Object.entries(opt).map(([k, v]) => (
                     <li key={k} className="rounded-lg bg-secondary px-3 py-1.5"><b>{k}.</b> {String(v)}</li>
@@ -958,7 +1018,7 @@ export function QuizList({ tasks, onCheck, onCorrect, gapLines }) {
                   {opt.sentences.map((s) => <li key={s}>{s}</li>)}
                 </ul>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">Say your answer aloud.</p>
+              {!mcqOptions(opt) && <p className="mt-2 text-xs text-muted-foreground">Say your answer aloud.</p>}
               {onCheck && <CheckRow task={t} onCheck={onCheck} onCorrect={onCorrect} gapLines={gapLines} />}
             </CardContent>
           </Card>

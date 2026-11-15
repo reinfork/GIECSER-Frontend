@@ -133,7 +133,7 @@ export default function LessonPlayer() {
       method: 'POST',
       body: JSON.stringify({ transcribed, duration_sec: durationSec }),
     })
-    return { fluency: json.fluency_score || 0, wpm: json.wpm || 0, accuracy: json.word_accuracy_score || 0 }
+    return { fluency: json.fluency_score || 0, wpm: json.wpm || 0, accuracy: json.word_accuracy_score || 0, mispronounced: json.mispronounced || [] }
   }
 
   // Reveal-after-attempt: key comes back inside the response, nothing stored.
@@ -260,7 +260,7 @@ export default function LessonPlayer() {
                 <CardContent className="pt-6">
                   <p className="text-muted-foreground text-sm">{module.content_text}</p>
                   <DialogueScript text={module.target_transcript} />
-                  {!hasGaps && <RolePlay text={module.target_transcript} />}
+                  {!hasGaps && <RolePlay text={module.target_transcript} speakTasks={tasks.filter((t) => t.type === 'SPEAKING_RECORDING')} onAnswer={answerQuestion} />}
                   {completed && <RolePlay text={completed} />}
                 </CardContent>
               </Card>
