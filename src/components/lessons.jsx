@@ -12,14 +12,14 @@ export const passageCls = 'text-justify font-normal leading-relaxed'
 
 // Plain statement card for goal/reference modules (no speaking task attached).
 // YAGNI: no progress, no checklist — the seed stores goals as plain text.
-export function GoalBlock({ content, transcript }) {
+export function GoalBlock({ content, transcript, collapsible }) {
   const say = transcript && transcript !== content ? `${content}. ${transcript}` : (transcript || content)
   return (
     <Card className="mt-4">
       <CardContent className={`pt-6 text-sm whitespace-pre-wrap ${passageCls}`}>
         <div className="mb-3"><ListenButton text={say} /></div>
         {content}
-        {transcript && transcript !== content && (
+        {!collapsible && transcript && transcript !== content && (
           <p className="mt-3">{transcript}</p>
         )}
       </CardContent>
@@ -336,7 +336,7 @@ function QuestionRow({ task, onAnswer }) {
         {err && <p className="mt-1.5 text-xs text-red-600">{err}</p>}
         {heard && res && (
           <p className="mt-1.5 text-xs text-muted-foreground">
-            You said: &ldquo;{heard}&rdquo; · <b className="text-foreground">{Math.round(res.fluency)} fluency</b> · {Math.round(res.wpm)} wpm
+            You said: &ldquo;{heard}&rdquo; · <b className="text-foreground">{Math.round(res.accuracy ?? res.fluency)}% accuracy</b> · {(res.accuracy ?? 0) >= 80 ? <span className="text-green-600 font-medium">Correct!</span> : <span className="text-amber-600 font-medium">Try again</span>}
           </p>
         )}
       </CardContent>

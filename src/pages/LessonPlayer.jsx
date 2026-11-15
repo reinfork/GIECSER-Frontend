@@ -133,7 +133,7 @@ export default function LessonPlayer() {
       method: 'POST',
       body: JSON.stringify({ transcribed, duration_sec: durationSec }),
     })
-    return { fluency: json.fluency_score || 0, wpm: json.wpm || 0 }
+    return { fluency: json.fluency_score || 0, wpm: json.wpm || 0, accuracy: json.word_accuracy_score || 0 }
   }
 
   // Reveal-after-attempt: key comes back inside the response, nothing stored.
@@ -276,7 +276,8 @@ export default function LessonPlayer() {
               <VocabTable words={body.trim().split(/[\s,]+/).filter(Boolean)} />
             ) : !speakTask && module.type !== 'QUIZ' ? (
               <>
-                <GoalBlock content={module.content_text} transcript={module.target_transcript} />
+                {/* ponytail: title sniff marks listen-first modules; a real `subtype` column ends it */}
+                <GoalBlock key={module.id} content={module.content_text} transcript={module.target_transcript} collapsible={!!module.audio_model_url || /oral questions/i.test(module?.title || '')} />
                 {/ASR Feedback/i.test(module.title || '') && chapterId && (
                   <SectionGate chapterId={chapterId} gateModuleId={module.id} />
                 )}
@@ -315,10 +316,6 @@ export default function LessonPlayer() {
             )}
 
             {module.type === 'ORAL_TEST' && <DraftReference courseId={module.course_id} />}
-
-            {module.audio_model_url && (
-              <audio controls preload="none" src={module.audio_model_url} className="mt-4 w-full" />
-            )}
 
             {recording && (
               <p className="mt-4 text-center text-sm text-muted-foreground">
