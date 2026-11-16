@@ -714,7 +714,7 @@ export function LabeledSections({ text }) {
 
 // ponytail: prompt-only cards — student API strips answer keys (Task.Public);
 // POST /tasks/:id/check reveals the key inside an attempt response.
-function hasObjectives(t) {
+export function hasObjectives(t) {
   try { return Array.isArray(JSON.parse(t.options_json || '{}').objectives) } catch { return false }
 }
 
@@ -730,8 +730,7 @@ export function ObjectivesChecklist({ tasks }) {
   return (
     <Card className="mt-4">
       <CardContent className="pt-6 text-sm">
-        <p className="font-medium leading-relaxed">{task.prompt}</p>
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2">
           {items.map((it, i) => (
             <label key={i} className="flex items-start gap-2 rounded-lg bg-secondary px-3 py-2 cursor-pointer">
               <input type="checkbox" className="mt-1" checked={!!done[i]}

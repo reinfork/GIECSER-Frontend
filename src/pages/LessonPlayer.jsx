@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Mic, Square } from 'lucide-react'
 import { authFetch } from '../auth'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { DialogueScript, FunctionCards, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, DraftBox, DraftReference, isDraftTask, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable, passageCls } from '@/components/lessons'
+import { DialogueScript, FunctionCards, GlossaryTable, GoalBlock, LabeledSections, ListenButton, ObjectivesChecklist, QuestionPractice, QuizList, RepeatPractice, RolePlay, DraftBox, DraftReference, hasObjectives, isDraftTask, StoryOrder, VideoBlock, VocabTable, WordsToFix, parsePairs, parseStory, parseTable, passageCls } from '@/components/lessons'
 import { SectionGate } from '@/components/feedback'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -197,6 +197,9 @@ export default function LessonPlayer() {
   const speakTask = tasks.find((t) => t.type === 'SPEAKING_RECORDING' && !/\?\s*$/.test(t.prompt || ''))
   // Supervisor rule: module-level mic only in Guided/Independent Speaking courses.
   const canRecord = /guided|independent/i.test(courseTitle)
+  // ponytail: Record My Monologue records the student's saved draft
+  // (DraftReference) — the seeded stub transcript is not a script to read.
+  const recordsDraft = module?.type === 'ORAL_TEST' && /record my monologue/i.test(module?.title || '')
   // ponytail: title/punctuation sniffing routes MONOLOGUE flavors (Kinds/Core/
   // Function/Grammar share one type); a real `subtype` column ends it.
   const body = module?.target_transcript || ''
@@ -276,7 +279,9 @@ export default function LessonPlayer() {
             ) : !speakTask && module.type !== 'QUIZ' ? (
               <>
                 {/* ponytail: title sniff marks listen-first modules; a real `subtype` column ends it */}
-                <GoalBlock key={module.id} content={module.content_text} transcript={module.target_transcript} collapsible={!!module.audio_model_url || /oral questions/i.test(module?.title || '')} />
+                {/* ponytail: goal modules carry the objectives checklist — the
+                    goal prose above it is dropped, checklist is the section */}
+                {!tasks.some(hasObjectives) && <GoalBlock key={module.id} content={module.content_text} transcript={module.target_transcript} collapsible={!!module.audio_model_url || /oral questions/i.test(module?.title || '')} />}
                 {/ASR Feedback/i.test(module.title || '') && chapterId && (
                   <SectionGate chapterId={chapterId} gateModuleId={module.id} />
                 )}
@@ -287,11 +292,15 @@ export default function LessonPlayer() {
                   {module.content_text && module.content_text !== module.target_transcript && (
                     <p className="text-muted-foreground text-sm text-left mb-3">{module.content_text}</p>
                   )}
-                  <div className="flex items-center justify-center gap-3">
-                    <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
-                    <ListenButton text={module.target_transcript || module.content_text} />
-                  </div>
-                  <p className={`text-lg whitespace-pre-wrap mt-2 ${passageCls}`}>{module.target_transcript || module.content_text}</p>
+                  {!recordsDraft && (
+                    <>
+                      <div className="flex items-center justify-center gap-3">
+                        <p className="text-muted-foreground text-sm">Read aloud, then record:</p>
+                        <ListenButton text={module.target_transcript || module.content_text} />
+                      </div>
+                      <p className={`text-lg whitespace-pre-wrap mt-2 ${passageCls}`}>{module.target_transcript || module.content_text}</p>
+                    </>
+                  )}
                   {speakTask && canRecord && (
                   <Button size="lg" onClick={toggleRecording} disabled={submitting} className="mt-6 rounded-full">
                     {recording ? <><Square className="size-4" /> Stop & assess</> : <><Mic className="size-4" /> {submitting ? 'Scoring...' : 'Record speaking'}</>}
